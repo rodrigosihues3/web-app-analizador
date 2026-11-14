@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 import urllib.error
 import urllib.request
 
@@ -22,6 +23,20 @@ ACTIVOS_ESTATICOS: tuple[tuple[str, Path], ...] = (
     (
         "https://cdn.plot.ly/plotly-2.30.0.min.js",
         STATIC_DIR / "js" / "plotly.min.js",
+    ),
+)
+
+# Fuentes variables (subconjunto latino, incluye acentos y eñe) para la interfaz.
+FUENTES_LOCALES: tuple[tuple[str, Path], ...] = (
+    (
+        "https://unpkg.com/@fontsource-variable/geist@5.3.0/files/"
+        "geist-latin-wght-normal.woff2",
+        STATIC_DIR / "fonts" / "geist-latin-wght-normal.woff2",
+    ),
+    (
+        "https://unpkg.com/@fontsource-variable/geist-mono@5.3.0/files/"
+        "geist-mono-latin-wght-normal.woff2",
+        STATIC_DIR / "fonts" / "geist-mono-latin-wght-normal.woff2",
     ),
 )
 
@@ -83,14 +98,20 @@ def descargar_activo(url: str, destino: Path, timeout: float = 60.0) -> int:
     return tamano_bytes
 
 
-def configurar_activos_locales() -> dict[str, int]:
-    """Ejecuta la descarga y verificación de todos los activos Offline-First.
+def configurar_activos_locales(
+    activos: tuple[tuple[str, Path], ...] = ACTIVOS_ESTATICOS + FUENTES_LOCALES,
+) -> dict[str, int]:
+    """Ejecuta la descarga y verificación de los activos Offline-First.
+
+    Args:
+        activos: Pares ``(url, ruta_destino)`` a descargar. Por defecto incluye
+            librerías y fuentes.
 
     Returns:
         Diccionario con la ruta relativa del archivo y su peso en bytes.
     """
     resumen: dict[str, int] = {}
-    for url, ruta_destino in ACTIVOS_ESTATICOS:
+    for url, ruta_destino in activos:
         ruta_relativa = str(ruta_destino.relative_to(BASE_DIR))
         print(f"[SETUP] Descargando {ruta_relativa} desde {url} ...")
         tamano = descargar_activo(url, ruta_destino)
@@ -102,4 +123,8 @@ def configurar_activos_locales() -> dict[str, int]:
 
 
 if __name__ == "__main__":
-    configurar_activos_locales()
+    # Con el argumento ``--fuentes`` solo se descargan las fuentes tipográficas.
+    if "--fuentes" in sys.argv[1:]:
+        configurar_activos_locales(FUENTES_LOCALES)
+    else:
+        configurar_activos_locales()

@@ -1,211 +1,124 @@
-<div class="space-y-6">
-    <!-- 1. Encabezado Ejecutivo Contextual (IA / Respaldo Determinista) -->
-    <section class="bg-white border border-gray-300 rounded-sm shadow-sm">
-        <div class="bg-pizarra text-white px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div class="flex items-center space-x-2">
-                <span class="px-2 py-0.5 text-xs font-mono font-bold uppercase bg-corporativo text-white rounded-sm">
-                    SÍNTESIS EJECUTIVA
-                </span>
-                <span class="text-xs font-mono text-gray-300">
-                    ARCHIVO: {{ nombre_archivo }} | SESIÓN: {{ session_id }}
-                </span>
-            </div>
-            <div class="flex items-center space-x-2">
+<div class="pila panel-auditoria">
+    <!-- Resumen -->
+    <section class="tarjeta" aria-labelledby="titulo-resumen">
+        <div class="tarjeta-cuerpo">
+            <h2 id="titulo-resumen" class="titulo-seccion">Resumen</h2>
+            <div class="sintesis-meta">
+                <span>{{ nombre_archivo }}</span>
+                <span class="mono">{{ session_id }}</span>
                 {% if total_nulos > 0 %}
-                <span class="px-2 py-0.5 text-xs font-mono font-bold uppercase bg-yellow-600 text-white rounded-sm">
-                    NULOS DETECTADOS: {{ total_nulos }}
-                </span>
+                <span class="insignia insignia-warn">NULOS DETECTADOS: {{ total_nulos }}</span>
                 {% else %}
-                <span class="px-2 py-0.5 text-xs font-mono font-bold uppercase bg-green-700 text-white rounded-sm">
-                    SIN NULOS
-                </span>
+                <span class="estado-ok"><span class="punto punto-ok" aria-hidden="true"></span>Sin nulos</span>
                 {% endif %}
                 {% if total_outliers > 0 %}
-                <span class="px-2 py-0.5 text-xs font-mono font-bold uppercase bg-red-700 text-white rounded-sm">
-                    OUTLIER IQR: {{ total_outliers }}
-                </span>
+                <span class="insignia insignia-danger">OUTLIER IQR: {{ total_outliers }}</span>
                 {% endif %}
             </div>
-        </div>
-        <div class="p-5">
-            <h3 class="text-base font-bold text-pizarra uppercase tracking-tight mb-2">
-                {{ contexto.titulo_reporte }}
-            </h3>
-            <p class="text-xs text-gray-700 leading-relaxed whitespace-pre-line border-l-4 border-corporativo pl-3 py-1 bg-gray-50">
-                {{ contexto.resumen_ejecutivo }}
-            </p>
+            <h3 class="sintesis-titulo">{{ contexto.titulo_reporte }}</h3>
+            <p class="sintesis-texto">{{ contexto.resumen_ejecutivo }}</p>
         </div>
     </section>
 
-    <!-- 2. Tarjetas KPI de Diagnóstico Estructural -->
-    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div class="bg-white border border-gray-300 rounded-sm p-4">
-            <div class="text-xs font-bold uppercase tracking-wider text-gray-500">
-                Total Filas
-            </div>
-            <div class="mt-2 text-2xl font-mono font-bold text-pizarra">
-                {{ auditoria.filas }}
-            </div>
-            <div class="mt-1 text-xs font-mono text-gray-500">
-                REGISTROS EN DF_RAW
-            </div>
+    <!-- Indicadores generales -->
+    <section class="rejilla-kpi" aria-label="Indicadores generales">
+        <div class="kpi">
+            <div class="kpi-etiqueta">Filas</div>
+            <div class="kpi-valor">{{ auditoria.filas }}</div>
         </div>
 
-        <div class="bg-white border border-gray-300 rounded-sm p-4">
-            <div class="text-xs font-bold uppercase tracking-wider text-gray-500">
-                Total Columnas
-            </div>
-            <div class="mt-2 text-2xl font-mono font-bold text-pizarra">
-                {{ auditoria.columnas }}
-            </div>
-            <div class="mt-1 text-xs font-mono text-gray-500">
-                VARIABLES TABULARES
-            </div>
+        <div class="kpi">
+            <div class="kpi-etiqueta">Columnas</div>
+            <div class="kpi-valor">{{ auditoria.columnas }}</div>
         </div>
 
-        <div class="bg-white border border-gray-300 rounded-sm p-4">
-            <div class="flex items-center justify-between">
-                <span class="text-xs font-bold uppercase tracking-wider text-gray-500">
-                    Filas Duplicadas
-                </span>
+        <div class="kpi">
+            <div class="kpi-etiqueta">
+                <span>Duplicados</span>
                 {% if auditoria.duplicados > 0 %}
-                <span class="px-1.5 py-0.5 text-xs font-mono font-bold bg-yellow-100 text-yellow-900 border border-yellow-400 rounded-sm">
-                    ALERTA
-                </span>
-                {% else %}
-                <span class="px-1.5 py-0.5 text-xs font-mono font-bold bg-green-100 text-green-900 border border-green-400 rounded-sm">
-                    OK
-                </span>
+                <span class="insignia insignia-warn">Alerta</span>
                 {% endif %}
             </div>
-            <div class="mt-2 text-2xl font-mono font-bold text-pizarra">
-                {{ auditoria.duplicados }}
-            </div>
-            <div class="mt-1 text-xs font-mono text-gray-500">
-                COINCIDENCIAS EXACTAS
-            </div>
+            <div class="kpi-valor">{{ auditoria.duplicados }}</div>
         </div>
 
-        <div class="bg-white border border-gray-300 rounded-sm p-4">
-            <div class="text-xs font-bold uppercase tracking-wider text-gray-500">
-                Memoria (KB)
-            </div>
-            <div class="mt-2 text-2xl font-mono font-bold text-pizarra">
-                {{ "%.2f"|format(auditoria.memoria_kb) }} KB
-            </div>
-            <div class="mt-1 text-xs font-mono text-gray-500">
-                USO EN MEMORIA RAM
-            </div>
+        <div class="kpi">
+            <div class="kpi-etiqueta">Memoria</div>
+            <div class="kpi-valor">{{ "%.2f"|format(auditoria.memoria_kb) }} <span class="etiqueta">KB</span></div>
         </div>
 
-        <div class="bg-white border border-gray-300 rounded-sm p-4">
-            <div class="flex items-center justify-between">
-                <span class="text-xs font-bold uppercase tracking-wider text-gray-500">
-                    Varianza Cero
-                </span>
+        <div class="kpi">
+            <div class="kpi-etiqueta">
+                <span>Varianza cero</span>
                 {% if auditoria.columnas_varianza_cero %}
-                <span class="px-1.5 py-0.5 text-xs font-mono font-bold bg-yellow-100 text-yellow-900 border border-yellow-400 rounded-sm">
-                    CONSTANTE
-                </span>
-                {% else %}
-                <span class="px-1.5 py-0.5 text-xs font-mono font-bold bg-green-100 text-green-900 border border-green-400 rounded-sm">
-                    OK
-                </span>
+                <span class="insignia insignia-warn">Constante</span>
                 {% endif %}
             </div>
-            <div class="mt-2 text-base font-mono font-bold text-pizarra truncate">
-                {% if auditoria.columnas_varianza_cero %}
-                    {{ auditoria.columnas_varianza_cero | join(", ") }}
-                {% else %}
-                    0 (Ninguna)
-                {% endif %}
+            {% if auditoria.columnas_varianza_cero %}
+            <div class="kpi-valor kpi-valor-texto" title="{{ auditoria.columnas_varianza_cero | join(', ') }}">
+                {{ auditoria.columnas_varianza_cero | join(", ") }}
             </div>
-            <div class="mt-1 text-xs font-mono text-gray-500">
-                COLUMNAS CON &le; 1 VALOR
-            </div>
+            {% else %}
+            <div class="kpi-valor">0</div>
+            {% endif %}
         </div>
     </section>
 
-    <!-- 3. Tabla de Auditoría de Esquema -->
-    <section class="bg-white border border-gray-300 rounded-sm shadow-sm">
-        <div class="bg-gray-100 border-b border-gray-300 px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <h3 class="text-xs font-bold uppercase tracking-wider text-pizarra">
-                    Módulo 02 — Auditoría de Esquema, Nulos y Diagnóstico IQR (Estado Original Inmutable)
-                </h3>
-            </div>
-            <span class="text-xs font-mono text-gray-600 mt-1 sm:mt-0">
-                INSPECCIÓN POO: DatasetAuditor.auditar_estructura()
-            </span>
+    <!-- Calidad de los datos -->
+    <section class="tarjeta" aria-labelledby="titulo-calidad">
+        <div class="tarjeta-cabecera">
+            <h2 id="titulo-calidad" class="titulo-seccion">Calidad de los datos</h2>
+            <span class="subtitulo">Revisión por columna</span>
         </div>
 
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-300 text-left text-xs">
-                <thead class="bg-pizarra text-white font-mono uppercase">
+            <table class="tabla">
+                <thead>
                     <tr>
-                        <th class="px-4 py-2.5 font-bold">Columna</th>
-                        <th class="px-4 py-2.5 font-bold">Tipo Técnico</th>
-                        <th class="px-4 py-2.5 font-bold">Tipo Lógico</th>
-                        <th class="px-4 py-2.5 font-bold">Nulos (%)</th>
-                        <th class="px-4 py-2.5 font-bold">Valores Únicos</th>
-                        <th class="px-4 py-2.5 font-bold">Outliers IQR</th>
-                        <th class="px-4 py-2.5 font-bold">Estado de Calidad</th>
+                        <th scope="col">Columna</th>
+                        <th scope="col">Tipo</th>
+                        <th scope="col">Clase</th>
+                        <th scope="col" class="num">Nulos</th>
+                        <th scope="col" class="num">Únicos</th>
+                        <th scope="col">Outliers</th>
+                        <th scope="col">Estado</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-200 bg-white font-mono">
+                <tbody>
                     {% for item in auditoria.esquema %}
                     {% set info_outlier = auditoria.outliers_iqr.get(item.columna, {}) %}
                     {% set cant_outlier = info_outlier.get("cantidad", 0) %}
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-2.5 font-bold text-pizarra">
-                            {{ item.columna }}
-                        </td>
-                        <td class="px-4 py-2.5 text-gray-700">
-                            {{ item.dtype }}
-                        </td>
-                        <td class="px-4 py-2.5">
-                            <span class="px-2 py-0.5 text-xs font-bold uppercase bg-gray-100 border border-gray-300 text-gray-800 rounded-sm">
-                                {{ item.tipo_logico }}
-                            </span>
-                        </td>
-                        <td class="px-4 py-2.5 text-gray-800">
-                            {{ item.nulos }} ({{ "%.2f"|format(item.porcentaje_nulos) }}%)
-                        </td>
-                        <td class="px-4 py-2.5 text-gray-800">
-                            {{ item.valores_unicos }}
-                        </td>
-                        <td class="px-4 py-2.5 text-gray-800">
+                    <tr>
+                        <td class="celda-titulo">{{ item.columna }}</td>
+                        <td class="celda-mono muted">{{ item.dtype }}</td>
+                        <td class="muted">{{ item.tipo_logico }}</td>
+                        <td class="num">{{ item.nulos }} <span class="muted">({{ "%.2f"|format(item.porcentaje_nulos) }}%)</span></td>
+                        <td class="num">{{ item.valores_unicos }}</td>
+                        <td class="celda-mono">
                             {% if item.tipo_logico == "numerica" %}
                                 {{ cant_outlier }}
                                 {% if info_outlier.get("limite_inferior") is not none %}
-                                <span class="text-gray-500">
-                                    [{{ "%.2f"|format(info_outlier.get("limite_inferior")) }} .. {{ "%.2f"|format(info_outlier.get("limite_superior")) }}]
-                                </span>
+                                <span class="muted">[{{ "%.2f"|format(info_outlier.get("limite_inferior")) }} .. {{ "%.2f"|format(info_outlier.get("limite_superior")) }}]</span>
                                 {% endif %}
                             {% else %}
-                                <span class="text-gray-400">N/A</span>
+                                <span class="muted">—</span>
                             {% endif %}
                         </td>
-                        <td class="px-4 py-2.5 space-x-1">
+                        <td>
                             {% if item.nulos == 0 and cant_outlier == 0 and item.columna not in auditoria.columnas_varianza_cero %}
-                            <span class="inline-block px-2 py-0.5 text-xs font-bold bg-green-100 text-green-900 border border-green-400 rounded-sm">
-                                OK
-                            </span>
-                            {% endif %}
-                            {% if item.nulos > 0 %}
-                            <span class="inline-block px-2 py-0.5 text-xs font-bold bg-yellow-100 text-yellow-900 border border-yellow-400 rounded-sm">
-                                NULOS DETECTADOS
-                            </span>
-                            {% endif %}
-                            {% if cant_outlier > 0 %}
-                            <span class="inline-block px-2 py-0.5 text-xs font-bold bg-red-100 text-red-900 border border-red-400 rounded-sm">
-                                OUTLIER IQR
-                            </span>
-                            {% endif %}
-                            {% if item.columna in auditoria.columnas_varianza_cero %}
-                            <span class="inline-block px-2 py-0.5 text-xs font-bold bg-gray-200 text-gray-800 border border-gray-400 rounded-sm">
-                                VARIANZA CERO
-                            </span>
+                            <span class="estado-ok"><span class="punto punto-ok" aria-hidden="true"></span>OK</span>
+                            {% else %}
+                            <div class="celda-estados">
+                                {% if item.nulos > 0 %}
+                                <span class="insignia insignia-warn">NULOS DETECTADOS</span>
+                                {% endif %}
+                                {% if cant_outlier > 0 %}
+                                <span class="insignia insignia-danger">OUTLIER IQR</span>
+                                {% endif %}
+                                {% if item.columna in auditoria.columnas_varianza_cero %}
+                                <span class="insignia insignia-warn">VARIANZA CERO</span>
+                                {% endif %}
+                            </div>
                             {% endif %}
                         </td>
                     </tr>
@@ -215,151 +128,88 @@
         </div>
     </section>
 
-    <!-- 4. Formulario Interactivo de Configuración de Limpieza y Análisis -->
-    <section class="bg-white border border-gray-300 rounded-sm shadow-sm">
-        <div class="bg-gray-100 border-b border-gray-300 px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <h3 class="text-xs font-bold uppercase tracking-wider text-pizarra">
-                    Módulo 03 — Configuración de Pipeline Funcional y Parámetros Analíticos
-                </h3>
-                <p class="text-xs text-gray-600 mt-0.5">
-                    Las transformaciones generan una estructura nueva sin mutar <code class="font-mono text-pizarra">self.df_raw</code>.
-                </p>
-            </div>
-            <span class="text-xs font-mono text-blue-900 bg-blue-50 px-2 py-0.5 border border-blue-200 rounded-sm mt-1 sm:mt-0">
-                PARADIGMA: FUNCIONAL PURO
-            </span>
-        </div>
-
+    <!-- Configuración del análisis -->
+    <section class="tarjeta" aria-labelledby="titulo-config">
         <form
             hx-post="/analizar/procesar"
             hx-target="#resultados-analisis"
             hx-indicator="#indicador-pipeline"
-            class="p-5 space-y-5"
         >
-            <input type="hidden" name="session_id" value="{{ session_id }}">
+            <div class="tarjeta-cuerpo pila-md">
+                <input type="hidden" name="session_id" value="{{ session_id }}">
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <!-- Parámetro 1: Estrategia de Imputación de Nulos -->
-                <div class="bg-gray-50 border border-gray-300 rounded-sm p-3.5">
-                    <label for="select-estrategia-nulos" class="block text-xs font-bold uppercase tracking-wider text-pizarra mb-1.5">
-                        1. Estrategia de Imputación de Nulos
-                    </label>
-                    <select
-                        id="select-estrategia-nulos"
-                        name="estrategia_nulos"
-                        class="block w-full text-xs font-mono text-gray-900 bg-white border border-gray-300 rounded-sm p-2 focus:outline-none focus:border-blue-700"
-                    >
-                        <option value="mediana" selected>mediana — Imputar numéricas con mediana y categóricas con moda</option>
-                        <option value="media">media — Imputar numéricas con promedio aritmético</option>
-                        <option value="moda">moda — Imputar con el valor más frecuente</option>
-                        <option value="eliminar">eliminar — Descartar registros con valores faltantes</option>
-                        <option value="ninguna">ninguna — Conservar valores nulos sin alterar</option>
-                    </select>
+                <div>
+                    <h2 id="titulo-config" class="titulo-seccion">Configuración del análisis</h2>
+                    <p class="subtitulo">Elige cómo limpiar los datos y qué comparar.</p>
                 </div>
 
-                <!-- Parámetro 2: Columna Categórica de Agrupación -->
-                <div class="bg-gray-50 border border-gray-300 rounded-sm p-3.5">
-                    <label for="select-col-categoria" class="block text-xs font-bold uppercase tracking-wider text-pizarra mb-1.5">
-                        2. Columna Categórica (Agrupación / Boxplot)
-                    </label>
-                    <select
-                        id="select-col-categoria"
-                        name="col_categoria"
-                        class="block w-full text-xs font-mono text-gray-900 bg-white border border-gray-300 rounded-sm p-2 focus:outline-none focus:border-blue-700"
-                    >
-                        {% for col_cat in columnas_categoricas %}
-                        <option value="{{ col_cat }}" {% if col_cat == col_categoria_default %}selected{% endif %}>
-                            {{ col_cat }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <!-- Parámetro 3: Columna Numérica Principal -->
-                <div class="bg-gray-50 border border-gray-300 rounded-sm p-3.5">
-                    <label for="select-col-numerica" class="block text-xs font-bold uppercase tracking-wider text-pizarra mb-1.5">
-                        3. Columna Numérica Principal (Métrica)
-                    </label>
-                    <select
-                        id="select-col-numerica"
-                        name="col_numerica"
-                        class="block w-full text-xs font-mono text-gray-900 bg-white border border-gray-300 rounded-sm p-2 focus:outline-none focus:border-blue-700"
-                    >
-                        {% for col_num in columnas_numericas %}
-                        <option value="{{ col_num }}" {% if col_num == col_numerica_default %}selected{% endif %}>
-                            {{ col_num }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- Checkbox: Eliminar filas duplicadas -->
-                <label class="flex items-start space-x-3 bg-gray-50 border border-gray-300 rounded-sm p-3.5 cursor-pointer">
-                    <input
-                        type="checkbox"
-                        name="eliminar_duplicados"
-                        value="true"
-                        checked
-                        class="mt-0.5 h-4 w-4 text-blue-700 border-gray-300 rounded-sm"
-                    >
+                <div class="rejilla-3">
                     <div>
-                        <span class="block text-xs font-bold uppercase tracking-wider text-pizarra">
-                            Eliminar Filas Duplicadas Exactas
-                        </span>
-                        <span class="block text-xs text-gray-600 mt-0.5">
-                            Filtra registros repetidos conservando la primera ocurrencia verificada.
-                        </span>
+                        <label for="select-estrategia-nulos" class="campo-etiqueta">Valores nulos</label>
+                        <p class="campo-ayuda">Cómo completar los datos faltantes.</p>
+                        <select id="select-estrategia-nulos" name="estrategia_nulos" class="control">
+                            <option value="mediana" selected>Mediana (moda en categorías)</option>
+                            <option value="media">Media</option>
+                            <option value="moda">Moda</option>
+                            <option value="eliminar">Eliminar filas con nulos</option>
+                            <option value="ninguna">No modificar</option>
+                        </select>
                     </div>
-                </label>
 
-                <!-- Checkbox: Acotar outliers mediante límites IQR -->
-                <label class="flex items-start space-x-3 bg-gray-50 border border-gray-300 rounded-sm p-3.5 cursor-pointer">
-                    <input
-                        type="checkbox"
-                        name="recortar_outliers"
-                        value="true"
-                        checked
-                        class="mt-0.5 h-4 w-4 text-blue-700 border-gray-300 rounded-sm"
-                    >
                     <div>
-                        <span class="block text-xs font-bold uppercase tracking-wider text-pizarra">
-                            Acotar Outliers Mediante Límites IQR (Winsorización Vectorizada)
-                        </span>
-                        <span class="block text-xs text-gray-600 mt-0.5">
-                            Aplica <code class="font-mono">numpy.clip</code> en el rango [Q1 - 1.5*IQR, Q3 + 1.5*IQR] sobre variables numéricas.
-                        </span>
+                        <label for="select-col-categoria" class="campo-etiqueta">Agrupar por</label>
+                        <p class="campo-ayuda">Columna de categorías a comparar.</p>
+                        <select id="select-col-categoria" name="col_categoria" class="control">
+                            {% for col_cat in columnas_categoricas %}
+                            <option value="{{ col_cat }}" {% if col_cat == col_categoria_default %}selected{% endif %}>
+                                {{ col_cat }}
+                            </option>
+                            {% endfor %}
+                        </select>
                     </div>
-                </label>
-            </div>
 
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pt-2 border-t border-gray-200 gap-3">
-                <div class="text-xs font-mono text-gray-600">
-                    ID SESIÓN ACTIVA: <span class="font-bold text-pizarra">{{ session_id }}</span>
+                    <div>
+                        <label for="select-col-numerica" class="campo-etiqueta">Métrica</label>
+                        <p class="campo-ayuda">Columna numérica a analizar.</p>
+                        <select id="select-col-numerica" name="col_numerica" class="control">
+                            {% for col_num in columnas_numericas %}
+                            <option value="{{ col_num }}" {% if col_num == col_numerica_default %}selected{% endif %}>
+                                {{ col_num }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 </div>
-                <button
-                    type="submit"
-                    class="px-5 py-2.5 bg-corporativo text-white text-xs font-bold uppercase tracking-wider rounded-sm transition-colors"
-                >
-                    Ejecutar Pipeline y Generar Gráficos
-                </button>
-            </div>
 
-            <!-- Indicador HTMX de Ejecución del Pipeline -->
-            <div id="indicador-pipeline" class="htmx-indicator w-full bg-blue-50 border border-blue-300 rounded-sm px-4 py-3 items-center justify-between">
-                <div class="flex items-center space-x-3">
-                    <span class="inline-block w-3 h-3 bg-corporativo rounded-sm animate-ping"></span>
-                    <span class="text-xs font-mono font-bold uppercase text-blue-900">
-                        EJECUTANDO TRANSFORMACIÓN INMUTABLE, ESTADÍSTICA DESCRIPTIVA Y RENDERIZADO PLOTLY...
-                    </span>
+                <div class="rejilla-2 rejilla-compacta">
+                    <label class="opcion">
+                        <input type="checkbox" name="eliminar_duplicados" value="true" checked>
+                        <span>
+                            <span class="opcion-titulo">Eliminar filas duplicadas</span>
+                            <span class="opcion-ayuda">Conserva solo la primera aparición.</span>
+                        </span>
+                    </label>
+
+                    <label class="opcion">
+                        <input type="checkbox" name="recortar_outliers" value="true" checked>
+                        <span>
+                            <span class="opcion-titulo">Limitar valores extremos</span>
+                            <span class="opcion-ayuda">Ajusta los atípicos al rango habitual.</span>
+                        </span>
+                    </label>
                 </div>
-                <span class="text-xs font-mono text-blue-800">CALCULANDO</span>
+
+                <div class="barra-formulario">
+                    <div id="indicador-pipeline" class="htmx-indicator indicador" role="status" aria-live="polite">
+                        <span class="spinner" aria-hidden="true"></span>
+                        <span>Procesando…</span>
+                    </div>
+                    <button type="submit" class="btn btn-primario">Ejecutar análisis</button>
+                </div>
             </div>
         </form>
     </section>
 
-    <!-- 5. Contenedor Destino para Resultados Analíticos (#resultados-analisis) -->
-    <div id="resultados-analisis" class="space-y-6"></div>
+    <!-- Destino de los resultados -->
+    <div id="resultados-analisis" class="pila"></div>
 </div>
