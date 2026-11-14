@@ -1,0 +1,31 @@
+Id_Orden,Fecha,Region,Categoria,Producto,Cantidad,Precio_Unitario,Total_Venta
+ORD-1001,2026-01-05,Norte,Tecnología,Laptop Pro 14,1,750.00,750.00
+ORD-1002,2026-01-06,Sur,Oficina,Silla Ergonómica,2,320.00,640.00
+ORD-1003,2026-01-07,Centro,Accesorios,Teclado Mecánico,3,95.00,285.00
+ORD-1004,2026-01-08,Este,Tecnología,Monitor 27 UHD,2,420.00,840.00
+ORD-1005,2026-01-10,Norte,Accesorios,Mouse Inalámbrico,5,45.00,225.00
+ORD-1006,2026-01-12,Sur,Mobiliario,Escritorio Ejecutivo,1,580.00,580.00
+ORD-1007,2026-01-14,Centro,Tecnología,Tablet 11,2,480.00,960.00
+ORD-1008,2026-01-15,Este,Oficina,Impresora Láser,,390.00,780.00
+ORD-1009,2026-01-17,Norte,Mobiliario,Archivador Metálico,2,260.00,520.00
+ORD-1010,2026-01-19,Sur,Accesorios,Audífonos Studio,4,110.00,440.00
+ORD-1011,2026-01-21,Centro,Tecnología,Laptop Pro 14,1,750.00,750.00
+ORD-1012,2026-01-23,Este,Oficina,Destructora Papel,2,210.00,420.00
+ORD-1013,2026-01-25,Norte,Accesorios,Webcam Full HD,3,85.00,255.00
+ORD-1014,2026-01-27,Sur,Tecnología,Monitor 27 UHD,2,420.00,840.00
+ORD-1015,2026-01-29,Centro,Mobiliario,Estantería Modular,2,340.00,680.00
+ORD-1016,2026-02-02,Este,Accesorios,Hub USB-C,4,65.00,260.00
+ORD-1017,2026-02-04,Norte,Oficina,Silla Ergonómica,3,320.00,960.00
+ORD-1018,2026-02-06,Sur,Tecnología,Tablet 11,,480.00,960.00
+ORD-1019,2026-02-08,Centro,Accesorios,Teclado Mecánico,2,95.00,190.00
+ORD-1020,2026-02-10,Este,Mobiliario,Escritorio Ejecutivo,2,580.00,1160.00
+ORD-1021,2026-02-12,Norte,Tecnología,Servidor Rack Mini,1,850.00,85000.00
+ORD-1022,2026-02-14,Sur,Oficina,Proyector HD,1,520.00,520.00
+ORD-1023,2026-02-16,Centro,Accesorios,Mouse Inalámbrico,4,45.00,180.00
+ORD-1024,2026-02-18,Este,Tecnología,Monitor 27 UHD,1,420.00,420.00
+ORD-1025,2026-02-20,Norte,Mobiliario,Archivador Metálico,3,260.00,780.00
+ORD-1026,2026-02-22,Sur,Accesorios,Audífonos Studio,3,110.00,330.00
+ORD-1027,2026-02-24,Centro,Oficina,Impresora Láser,2,390.00,780.00
+ORD-1028,2026-02-26,Este,Tecnología,Laptop Pro 14,1,750.00,750.00
+ORD-1029,2026-02-27,Norte,Accesorios,Webcam Full HD,4,85.00,340.00
+ORD-1030,2026-02-28,Sur,Mobiliario,Silla Gerencial,2,460.00,920.00

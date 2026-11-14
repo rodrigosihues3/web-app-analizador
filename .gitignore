@@ -1,0 +1,28 @@
+# Entornos virtuales y dependencias
+venv/
+.venv/
+env/
+
+# Secretos y variables de entorno
+.env
+.env.local
+
+# Caché y compilados de Python (en raíz y subcarpetas como core/ y web/)
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Archivos temporales de ejecución (conserva la carpeta con .gitkeep)
+temp_uploads/*
+!temp_uploads/.gitkeep
+
+# Artefactos de prueba o reportes sueltos en raíz
+test_output.pdf
+*.log
+
+# Configuración local de IDEs
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
