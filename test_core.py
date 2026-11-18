@@ -15,13 +15,15 @@ import pandas as pd
 from core.auditor import DatasetAuditor
 from core.estadistica import (
     analizar_valores_clave,
+    extraer_metricas_grafico,
     matriz_correlacion,
     resumen_descriptivo,
 )
 from core.exportador import exportar_dataframe, generar_reporte_pdf
-from core.sintetizador import generar_contexto_ejecutivo
+from core.sintetizador import explicar_grafico_ia, generar_contexto_ejecutivo
 from core.transformador import limpiar_dataset
 from core.visualizador import (
+    generar_barras_categoria_plotly,
     generar_boxplot_plotly,
     generar_graficos_estaticos_pdf,
     generar_heatmap_plotly,
@@ -207,15 +209,23 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
         )
 
         html_hist = generar_histograma_plotly(df_limpio, "Nota")
+        html_barras = generar_barras_categoria_plotly(
+            df_limpio, "Nota", "Asignatura"
+        )
         html_box = generar_boxplot_plotly(
             df_limpio, "Nota", col_grupo="Asignatura"
         )
         html_hm = generar_heatmap_plotly(df_limpio)
 
-        for html_frag in (html_hist, html_box, html_hm):
+        for html_frag in (html_hist, html_barras, html_box, html_hm):
             self.assertIn("plotly", html_frag.lower())
+            self.assertIn('"displaymodebar": false', html_frag.lower())
             self.assertNotIn("<html", html_frag.lower())
             self.assertNotIn("https://", html_frag.lower())
+
+        self.assertIn("Media:", html_hist)
+        self.assertIn("Mediana:", html_hist)
+        self.assertIn("Promedio general:", html_barras)
 
         graficos_pdf = generar_graficos_estaticos_pdf(df_limpio)
         self.assertEqual(len(graficos_pdf), 3)
@@ -235,6 +245,27 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
             self.assertTrue(ctx_sin_key["titulo_reporte"])
             self.assertTrue(ctx_sin_key["resumen_ejecutivo"])
 
+            df_limpio, _ = limpiar_dataset(auditor.df_raw)
+            metricas_hist = extraer_metricas_grafico(
+                df_limpio, "histograma", col_metrica="Nota"
+            )
+            metricas_barras = extraer_metricas_grafico(
+                df_limpio,
+                "barras",
+                col_metrica="Nota",
+                col_categoria="Asignatura",
+            )
+            metricas_corr = extraer_metricas_grafico(df_limpio, "correlacion")
+
+            for tipo_g, met_g in (
+                ("histograma", metricas_hist),
+                ("barras", metricas_barras),
+                ("correlacion", metricas_corr),
+            ):
+                texto_g = explicar_grafico_ia(ctx_sin_key, tipo_g, met_g)
+                self.assertTrue(len(texto_g) > 20)
+                self.assertNotIn("**", texto_g)
+
         with patch.dict(
             os.environ, {"GEMINI_API_KEY": "clave_simulada"}, clear=False
         ):
@@ -245,6 +276,15 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
                 ctx_fallback = generar_contexto_ejecutivo(auditoria, muestra)
                 self.assertTrue(ctx_fallback["titulo_reporte"])
                 self.assertTrue(ctx_fallback["resumen_ejecutivo"])
+
+            with patch(
+                "core.sintetizador._invocar_gemini_grafico",
+                side_effect=TimeoutError("Timeout simulado > 4s"),
+            ):
+                exp_fallback = explicar_grafico_ia(
+                    ctx_fallback, "histograma", metricas_hist
+                )
+                self.assertTrue(len(exp_fallback) > 20)
 
     def test_flujo_completo_exportacion_y_pdf_en_disco(self) -> None:
         """Ejecuta flujo integral en ambos datasets, valida test_output.pdf y lo elimina."""

@@ -1,21 +1,20 @@
+{% from "macros/icons.html" import lucide_icon %}
 <!DOCTYPE html>
-<html lang="es" data-theme="light">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Analizador de Datos{% endblock %}</title>
     <script>
         (function () {
-            var tema = "light";
             try {
-                var guardado = window.localStorage.getItem("tema-analizador");
-                if (guardado === "dark" || guardado === "light") {
-                    tema = guardado;
+                var saved = localStorage.getItem("analizador_theme");
+                var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+                var theme = saved || (prefersDark ? "dark" : "light");
+                if (theme === "dark") {
+                    document.documentElement.setAttribute("data-theme", "dark");
                 }
-            } catch (err) {
-                /* Sin acceso al almacenamiento: se usa el tema claro. */
-            }
-            document.documentElement.setAttribute("data-theme", tema);
+            } catch (e) {}
         })();
     </script>
     <link rel="stylesheet" href="/static/css/tailwind.min.css">
@@ -24,49 +23,410 @@
     <script src="/static/js/htmx.min.js"></script>
 </head>
 <body class="min-h-screen flex flex-col antialiased">
-    <header class="encabezado">
-        <div class="contenedor encabezado-interior">
-            <h1 class="titulo-app">Analizador de Datos</h1>
-            <button type="button" id="boton-tema" class="btn btn-icono" aria-label="Cambiar a tema oscuro" title="Cambiar a tema oscuro">
-                <svg class="icono-luna" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
-                </svg>
-                <svg class="icono-sol" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <circle cx="12" cy="12" r="4"></circle>
-                    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
-                </svg>
-            </button>
+    <!-- Barra superior fija compacta -->
+    <header class="navbar-sticky">
+        <div class="max-w-6xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-4">
+            <a href="/" class="flex items-center gap-2.5 text-primary no-underline focus-visible:outline-none">
+                <span class="inline-block w-2.5 h-2.5 rounded-full" style="background-color: var(--accent);"></span>
+                <span class="text-base font-semibold heading-tight">Analizador de Datos</span>
+            </a>
+
+            <div class="flex items-center gap-2">
+                <button
+                    type="button"
+                    id="btn-abrir-modal-carga"
+                    onclick="window.openUploadModal()"
+                    class="btn-primary px-3.5 py-1.5 text-sm"
+                >
+                    {{ lucide_icon("upload", "w-4 h-4") }}
+                    <span>Subir archivo</span>
+                </button>
+
+                <button
+                    type="button"
+                    id="btn-cambiar-tema"
+                    onclick="window.toggleTheme()"
+                    class="btn-secondary p-2"
+                    aria-label="Cambiar tema claro u oscuro"
+                    title="Cambiar tema"
+                >
+                    <span class="icon-sun">{{ lucide_icon("sun", "w-4 h-4") }}</span>
+                    <span class="icon-moon">{{ lucide_icon("moon", "w-4 h-4") }}</span>
+                </button>
+            </div>
         </div>
     </header>
 
-    <main class="principal contenedor">
+    <!-- Área principal -->
+    <main class="flex-grow max-w-6xl w-full mx-auto px-4 sm:px-6 py-8">
         {% block content %}{% endblock %}
     </main>
 
-    <script src="/static/js/theme.js"></script>
-    <script>
-        document.body.addEventListener("htmx:beforeSwap", function (evt) {
-            if (evt.detail.xhr && evt.detail.xhr.status === 400) {
-                evt.detail.shouldSwap = true;
-                evt.detail.isError = false;
-            }
-        });
+    <!-- Pie discreto -->
+    <footer class="border-t border-hairline mt-12">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted">
+            <span>Analizador de Datos · Procesamiento local</span>
+            <span>Formatos compatibles: CSV y Excel (.xlsx)</span>
+        </div>
+    </footer>
 
-        document.body.addEventListener("htmx:afterSettle", function (evt) {
-            if (window.Plotly) {
-                var graficos = evt.detail.elt.querySelectorAll(".plotly-graph-div");
-                graficos.forEach(function (div) {
+    <!-- Modal global de carga (clic o arrastrar y soltar) -->
+    <div
+        id="modal-carga"
+        class="modal-backdrop"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-carga-titulo"
+        aria-hidden="true"
+    >
+        <div class="modal-panel p-6 space-y-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 id="modal-carga-titulo" class="text-base font-semibold text-primary heading-tight">
+                        Cargar archivo de datos
+                    </h2>
+                    <p class="text-xs text-secondary mt-0.5">
+                        El archivo original permanece intacto durante todo el análisis.
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onclick="window.closeUploadModal()"
+                    class="btn-ghost p-1.5"
+                    aria-label="Cerrar modal"
+                >
+                    {{ lucide_icon("x", "w-4 h-4") }}
+                </button>
+            </div>
+
+            <form
+                id="form-carga-modal"
+                hx-post="/analizar/cargar"
+                hx-target="#workspace"
+                hx-encoding="multipart/form-data"
+                hx-indicator="#indicador-carga-modal"
+                class="space-y-4"
+            >
+                <label
+                    id="modal-dropzone"
+                    for="input-archivo-modal"
+                    class="dropzone-area block p-8 text-center cursor-pointer"
+                >
+                    <div class="flex flex-col items-center gap-2.5">
+                        <span class="p-2.5 rounded-full surface-card text-accent">
+                            {{ lucide_icon("upload", "w-5 h-5") }}
+                        </span>
+                        <div class="text-sm font-medium text-primary">
+                            Arrastra tu archivo aquí o haz clic para seleccionarlo
+                        </div>
+                        <div class="text-xs text-muted">
+                            Solo archivos tabulares .csv o .xlsx
+                        </div>
+                        <div id="modal-archivo-nombre" class="hidden text-xs font-mono text-accent mt-1"></div>
+                    </div>
+                    <input
+                        id="input-archivo-modal"
+                        name="archivo"
+                        type="file"
+                        accept=".csv,.xlsx"
+                        class="sr-only"
+                    >
+                </label>
+
+                <div id="modal-error-archivo" class="hidden text-xs px-3 py-2 rounded-md badge-danger"></div>
+
+                <div class="flex items-center justify-between gap-3">
+                    <div id="indicador-carga-modal" class="htmx-indicator items-center gap-2 text-xs text-secondary">
+                        <span class="icon-spin inline-flex">{{ lucide_icon("refresh-cw", "w-3.5 h-3.5") }}</span>
+                        <span>Leyendo y auditando estructura...</span>
+                    </div>
+
+                    <div class="flex items-center gap-2 ml-auto">
+                        <button
+                            type="button"
+                            onclick="window.closeUploadModal()"
+                            class="btn-secondary px-3.5 py-1.5 text-sm"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="submit"
+                            class="btn-primary px-4 py-1.5 text-sm"
+                        >
+                            Analizar archivo
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var modal = document.getElementById("modal-carga");
+            var dropzone = document.getElementById("modal-dropzone");
+            var fileInput = document.getElementById("input-archivo-modal");
+            var fileNameEl = document.getElementById("modal-archivo-nombre");
+            var errorEl = document.getElementById("modal-error-archivo");
+            var uploadForm = document.getElementById("form-carga-modal");
+            var dragDepth = 0;
+
+            function isDarkTheme() {
+                return document.documentElement.getAttribute("data-theme") === "dark";
+            }
+
+            window.updatePlotlyTheme = function (container) {
+                if (!window.Plotly) return;
+                var scope = container || document;
+                var dark = isDarkTheme();
+                var textColor = dark ? "#fafafa" : "#18181b";
+                var mutedColor = dark ? "#a1a1aa" : "#52525b";
+                var gridColor = dark ? "#27272a" : "#e7e5e4";
+
+                var divs = scope.querySelectorAll(".plotly-graph-div");
+                divs.forEach(function (div) {
                     try {
+                        window.Plotly.relayout(div, {
+                            "font.color": textColor,
+                            "title.font.color": textColor,
+                            "xaxis.gridcolor": gridColor,
+                            "xaxis.linecolor": gridColor,
+                            "xaxis.zerolinecolor": gridColor,
+                            "xaxis.tickfont.color": mutedColor,
+                            "xaxis.title.font.color": mutedColor,
+                            "yaxis.gridcolor": gridColor,
+                            "yaxis.linecolor": gridColor,
+                            "yaxis.zerolinecolor": gridColor,
+                            "yaxis.tickfont.color": mutedColor,
+                            "yaxis.title.font.color": mutedColor
+                        });
                         window.Plotly.Plots.resize(div);
-                    } catch (err) {
-                        /* Ajuste silencioso */
+                    } catch (err) {}
+                });
+            };
+
+            window.toggleTheme = function () {
+                var nextTheme = isDarkTheme() ? "light" : "dark";
+                if (nextTheme === "dark") {
+                    document.documentElement.setAttribute("data-theme", "dark");
+                } else {
+                    document.documentElement.removeAttribute("data-theme");
+                }
+                try {
+                    localStorage.setItem("analizador_theme", nextTheme);
+                } catch (e) {}
+                window.updatePlotlyTheme(document);
+            };
+
+            window.openUploadModal = function () {
+                if (!modal) return;
+                if (errorEl) {
+                    errorEl.classList.add("hidden");
+                    errorEl.textContent = "";
+                }
+                modal.classList.add("is-open");
+                modal.setAttribute("aria-hidden", "false");
+            };
+
+            window.closeUploadModal = function () {
+                if (!modal) return;
+                modal.classList.remove("is-open");
+                modal.setAttribute("aria-hidden", "true");
+                if (dropzone) dropzone.classList.remove("is-dragover");
+                dragDepth = 0;
+            };
+
+            window.toggleAccordion = function (cardId) {
+                var card = document.getElementById(cardId);
+                if (!card) return;
+                var collapsed = card.classList.toggle("is-collapsed");
+                var trigger = card.querySelector("[data-accordion-trigger]");
+                if (trigger) {
+                    trigger.setAttribute("aria-expanded", String(!collapsed));
+                }
+            };
+
+            window.collapseAuditAccordions = function () {
+                ["acordeon-calidad", "acordeon-configuracion"].forEach(function (id) {
+                    var card = document.getElementById(id);
+                    if (card && !card.classList.contains("is-collapsed")) {
+                        card.classList.add("is-collapsed");
+                        var trigger = card.querySelector("[data-accordion-trigger]");
+                        if (trigger) trigger.setAttribute("aria-expanded", "false");
                     }
                 });
-                if (window.AnalizadorTema) {
-                    window.AnalizadorTema.aplicarGraficos(evt.detail.elt);
+            };
+
+            window.runTypewriter = function (scope) {
+                var root = scope || document;
+                var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+                var targets = root.querySelectorAll('[data-typewriter="true"]');
+                targets.forEach(function (el) {
+                    if (el.dataset.typed === "done") return;
+                    var fullText = el.textContent || "";
+                    el.dataset.typed = "done";
+                    if (reduceMotion || fullText.length === 0) return;
+
+                    el.textContent = "";
+                    var idx = 0;
+                    var step = Math.max(1, Math.ceil(fullText.length / 65));
+                    function tick() {
+                        idx = Math.min(fullText.length, idx + step);
+                        el.textContent = fullText.slice(0, idx);
+                        if (idx < fullText.length) {
+                            window.requestAnimationFrame(tick);
+                        }
+                    }
+                    window.requestAnimationFrame(tick);
+                });
+            };
+
+            function handleSelectedFile(file) {
+                if (!file) return;
+                var lower = file.name.toLowerCase();
+                if (!lower.endsWith(".csv") && !lower.endsWith(".xlsx")) {
+                    if (errorEl) {
+                        errorEl.textContent = "Formato no compatible. Selecciona un archivo .csv o .xlsx.";
+                        errorEl.classList.remove("hidden");
+                    }
+                    return;
+                }
+                if (errorEl) {
+                    errorEl.classList.add("hidden");
+                    errorEl.textContent = "";
+                }
+                if (fileNameEl) {
+                    fileNameEl.textContent = "Archivo seleccionado: " + file.name;
+                    fileNameEl.classList.remove("hidden");
+                }
+                if (uploadForm && typeof uploadForm.requestSubmit === "function") {
+                    uploadForm.requestSubmit();
+                } else if (uploadForm) {
+                    htmx.trigger(uploadForm, "submit");
                 }
             }
-        });
+
+            if (fileInput) {
+                fileInput.addEventListener("change", function () {
+                    if (fileInput.files && fileInput.files.length > 0) {
+                        handleSelectedFile(fileInput.files[0]);
+                    }
+                });
+            }
+
+            if (modal) {
+                modal.addEventListener("click", function (evt) {
+                    if (evt.target === modal) {
+                        window.closeUploadModal();
+                    }
+                });
+            }
+
+            document.addEventListener("keydown", function (evt) {
+                if (evt.key === "Escape") {
+                    window.closeUploadModal();
+                    document.querySelectorAll(".tooltip-wrapper.is-open").forEach(function (w) {
+                        w.classList.remove("is-open");
+                    });
+                }
+            });
+
+            /* Arrastrar archivo sobre cualquier punto de la ventana */
+            function hasFiles(evt) {
+                return evt.dataTransfer && Array.prototype.indexOf.call(evt.dataTransfer.types || [], "Files") !== -1;
+            }
+
+            window.addEventListener("dragenter", function (evt) {
+                if (!hasFiles(evt)) return;
+                evt.preventDefault();
+                dragDepth += 1;
+                window.openUploadModal();
+                if (dropzone) dropzone.classList.add("is-dragover");
+            });
+
+            window.addEventListener("dragover", function (evt) {
+                if (!hasFiles(evt)) return;
+                evt.preventDefault();
+                if (evt.dataTransfer) evt.dataTransfer.dropEffect = "copy";
+                if (dropzone) dropzone.classList.add("is-dragover");
+            });
+
+            window.addEventListener("dragleave", function (evt) {
+                if (!hasFiles(evt)) return;
+                dragDepth = Math.max(0, dragDepth - 1);
+                if (dragDepth === 0 && dropzone) {
+                    dropzone.classList.remove("is-dragover");
+                }
+            });
+
+            window.addEventListener("drop", function (evt) {
+                if (!hasFiles(evt)) return;
+                evt.preventDefault();
+                dragDepth = 0;
+                if (dropzone) dropzone.classList.remove("is-dragover");
+                var files = evt.dataTransfer.files;
+                if (files && files.length > 0 && fileInput) {
+                    try {
+                        var dt = new DataTransfer();
+                        dt.items.add(files[0]);
+                        fileInput.files = dt.files;
+                    } catch (err) {}
+                    window.openUploadModal();
+                    handleSelectedFile(files[0]);
+                }
+            });
+
+            /* Soporte táctil / clic para tooltips ? */
+            document.addEventListener("click", function (evt) {
+                var trigger = evt.target.closest ? evt.target.closest(".tooltip-trigger") : null;
+                document.querySelectorAll(".tooltip-wrapper.is-open").forEach(function (w) {
+                    if (!trigger || !w.contains(trigger)) {
+                        w.classList.remove("is-open");
+                    }
+                });
+                if (trigger) {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    var wrapper = trigger.closest(".tooltip-wrapper");
+                    if (wrapper) wrapper.classList.toggle("is-open");
+                }
+            });
+
+            /* Manejo HTMX */
+            document.body.addEventListener("htmx:beforeSwap", function (evt) {
+                if (evt.detail.xhr && evt.detail.xhr.status === 400) {
+                    evt.detail.shouldSwap = true;
+                    evt.detail.isError = false;
+                }
+            });
+
+            document.body.addEventListener("htmx:afterSwap", function (evt) {
+                var target = evt.detail && evt.detail.target;
+                if (!target) return;
+
+                if (target.id === "workspace") {
+                    window.closeUploadModal();
+                    if (uploadForm) uploadForm.reset();
+                    if (fileNameEl) {
+                        fileNameEl.classList.add("hidden");
+                        fileNameEl.textContent = "";
+                    }
+                }
+
+                if (target.id === "resultados-analisis") {
+                    window.collapseAuditAccordions();
+                    target.scrollIntoView({ behavior: "smooth", block: "start" });
+                }
+
+                window.runTypewriter(target);
+                window.updatePlotlyTheme(target);
+            });
+
+            document.body.addEventListener("htmx:afterSettle", function (evt) {
+                var elt = evt.detail && evt.detail.elt;
+                if (elt) window.updatePlotlyTheme(elt);
+            });
+        })();
     </script>
 </body>
 </html>

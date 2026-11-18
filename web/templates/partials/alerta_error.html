@@ -1,5 +1,16 @@
-<div class="alerta" role="alert">
-    <span class="alerta-etiqueta">ALERTA CONTROLADA</span>
-    <h3 class="alerta-titulo">{{ titulo_error | default("No se pudo completar la operación") }}</h3>
-    <p class="alerta-mensaje">{{ mensaje_error }}</p>
+{% from "macros/icons.html" import lucide_icon %}
+<div class="surface-card p-4 badge-danger" role="alert">
+    <div class="flex items-start gap-3">
+        <span class="mt-0.5 flex-shrink-0">
+            {{ lucide_icon("alert-triangle", "w-4 h-4") }}
+        </span>
+        <div class="space-y-1">
+            <h3 class="text-sm font-semibold">
+                {{ titulo_error | default("Ocurrió un inconveniente al procesar la solicitud") }}
+            </h3>
+            <p class="text-xs leading-relaxed">
+                {{ mensaje_error }}
+            </p>
+        </div>
+    </div>
 </div>

@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from web.app import SESIONES, TEMP_UPLOADS_DIR, TEMPLATES_DIR, STATIC_DIR, app
+from web.app import SESIONES, STATIC_DIR, TEMPLATES_DIR, TEMP_UPLOADS_DIR, app
 
 BASE_DIR: Path = Path(__file__).resolve().parent
 RUTA_NOTAS: Path = BASE_DIR / "datasets" / "notas_estudiantes.csv"
@@ -44,7 +44,7 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
         _limpiar_temp_uploads()
 
     def test_01_activos_estaticos_y_plantillas_sin_cdn(self) -> None:
-        """Verifica que los 3 activos locales pesen > 10 KB y cero CDN en HTML."""
+        """Verifica activos locales y ausencia total de enlaces CDN en HTML."""
         activos_esperados = (
             STATIC_DIR / "css" / "tailwind.min.css",
             STATIC_DIR / "js" / "htmx.min.js",
@@ -61,8 +61,10 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
                 f"El activo {ruta_activo.name} pesa menos de 10 KB.",
             )
 
+        self.assertTrue((STATIC_DIR / "css" / "app.css").exists())
+
         archivos_html = list(TEMPLATES_DIR.rglob("*.html"))
-        self.assertGreaterEqual(len(archivos_html), 5)
+        self.assertGreaterEqual(len(archivos_html), 7)
         for ruta_html in archivos_html:
             contenido = ruta_html.read_text(encoding="utf-8").lower()
             self.assertNotIn(
@@ -76,22 +78,25 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
                 f"Enlace externo https:// detectado en {ruta_html.name}",
             )
 
-    def test_02_get_index_referencias_locales_y_cero_urls_externas(self) -> None:
-        """Valida que GET / retorne HTTP 200 con activos /static/ y sin CDN."""
+    def test_02_get_index_referencias_locales_y_vista_manual_limpia(self) -> None:
+        """Valida GET / con activos locales, modal drag-and-drop y cero URLs externas."""
         respuesta = self.client.get("/")
         self.assertEqual(respuesta.status_code, 200)
 
         html = respuesta.text
         self.assertIn("/static/css/tailwind.min.css", html)
+        self.assertIn("/static/css/app.css", html)
         self.assertIn("/static/js/htmx.min.js", html)
         self.assertIn("/static/js/plotly.min.js", html)
-        self.assertIn("notas_estudiantes.csv", html)
-        self.assertIn("retail_sales.csv", html)
+        self.assertIn("Analizador de Datos", html)
+        self.assertIn("Subir archivo", html)
+        self.assertIn("modal-carga", html)
+        self.assertNotIn("notas_estudiantes.csv", html)
         self.assertNotIn("http://", html.lower())
         self.assertNotIn("https://", html.lower())
 
-    def test_03_flujo_completo_cargar_procesar_y_exportar(self) -> None:
-        """Valida carga, auditoría, procesamiento Plotly y exportaciones CSV/XLSX/PDF."""
+    def test_03_flujo_completo_cargar_regenerar_procesar_explicar_exportar(self) -> None:
+        """Valida ingesta, regeneración, limpieza, gráficos, explicabilidad y exportación."""
         with patch.dict(os.environ, {"GEMINI_API_KEY": ""}, clear=False):
             with RUTA_NOTAS.open("rb") as archivo_csv:
                 resp_carga = self.client.post(
@@ -107,9 +112,10 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
 
         self.assertEqual(resp_carga.status_code, 200)
         html_auditoria = resp_carga.text
-        self.assertIn("NULOS DETECTADOS", html_auditoria)
-        self.assertIn("OUTLIER IQR", html_auditoria)
-        self.assertIn("25", html_auditoria)
+        self.assertIn("Nulos:", html_auditoria)
+        self.assertIn("Atípicos:", html_auditoria)
+        self.assertIn("Calidad de los datos", html_auditoria)
+        self.assertIn("Configuración del análisis", html_auditoria)
         self.assertNotIn("http://", html_auditoria.lower())
         self.assertNotIn("https://", html_auditoria.lower())
 
@@ -121,6 +127,19 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
         )
         session_id = coincidencia.group(1) if coincidencia else ""
         self.assertIn(session_id, SESIONES)
+
+        # El UUID de sesión no debe exponerse visiblemente fuera de atributos internos
+        texto_visible = re.sub(r"<[^>]+>", " ", html_auditoria)
+        self.assertNotIn(session_id, texto_visible)
+
+        # Regenerar resumen ejecutivo
+        with patch.dict(os.environ, {"GEMINI_API_KEY": ""}, clear=False):
+            resp_regen = self.client.post(
+                "/analizar/regenerar-resumen",
+                data={"session_id": session_id},
+            )
+        self.assertEqual(resp_regen.status_code, 200)
+        self.assertIn('data-typewriter="true"', resp_regen.text)
 
         # Ejecutar POST /analizar/procesar
         resp_proc = self.client.post(
@@ -138,14 +157,32 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
         html_resultados = resp_proc.text
 
         self.assertIn("contenedor-plotly-histograma", html_resultados)
-        self.assertIn("contenedor-plotly-boxplot", html_resultados)
+        self.assertIn("contenedor-plotly-barras", html_resultados)
         self.assertIn("contenedor-plotly-heatmap", html_resultados)
         self.assertIn("plotly-graph-div", html_resultados)
-        self.assertIn("Registro Máximo Global", html_resultados)
-        self.assertIn("Categoría Líder en Promedio", html_resultados)
+        self.assertIn('"displaymodebar": false', html_resultados.lower())
+        self.assertIn("Registro máximo global", html_resultados)
+        self.assertIn("Categoría líder en promedio", html_resultados)
         self.assertIn("Duplicados eliminados", html_resultados)
+        self.assertIn("Analizar con IA", html_resultados)
         self.assertNotIn("http://", html_resultados.lower())
         self.assertNotIn("https://", html_resultados.lower())
+
+        # Explicabilidad IA (respaldo determinista offline) para las 3 gráficas
+        with patch.dict(os.environ, {"GEMINI_API_KEY": ""}, clear=False):
+            for tipo in ("histograma", "barras", "correlacion"):
+                resp_exp = self.client.post(
+                    "/analizar/explicar-grafico",
+                    data={
+                        "session_id": session_id,
+                        "tipo_grafico": tipo,
+                        "col_numerica": "Nota",
+                        "col_categoria": "Asignatura",
+                    },
+                )
+                self.assertEqual(resp_exp.status_code, 200)
+                self.assertIn('data-typewriter="true"', resp_exp.text)
+                self.assertNotIn("**", resp_exp.text)
 
         # Exportar Dataset Limpio (.CSV)
         resp_csv = self.client.get(
@@ -181,31 +218,35 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
         self.assertTrue(resp_pdf.content.startswith(b"%PDF"))
         self.assertGreater(len(resp_pdf.content), 10240)
 
-    def test_04_selector_demo_y_manejo_controlado_de_errores(self) -> None:
-        """Verifica carga mediante dataset_demo y alertas HTML controladas."""
-        with patch.dict(os.environ, {"GEMINI_API_KEY": ""}, clear=False):
-            resp_demo = self.client.post(
-                "/analizar/cargar",
-                data={"dataset_demo": "retail_sales.csv"},
-            )
-        self.assertEqual(resp_demo.status_code, 200)
-        self.assertIn("Total_Venta", resp_demo.text)
-
-        # Archivo vacío
+    def test_04_manejo_controlado_de_errores(self) -> None:
+        """Verifica alertas HTML controladas ante archivo vacío y sesión inválida."""
         resp_vacio = self.client.post(
             "/analizar/cargar",
             files={"archivo": ("vacio.csv", b"", "text/csv")},
         )
         self.assertEqual(resp_vacio.status_code, 200)
-        self.assertIn("ALERTA CONTROLADA", resp_vacio.text)
+        self.assertIn("No se pudo leer el archivo", resp_vacio.text)
 
-        # Sesión inexistente
         resp_sesion_invalida = self.client.post(
             "/analizar/procesar",
             data={"session_id": "sesion-inexistente"},
         )
         self.assertEqual(resp_sesion_invalida.status_code, 200)
-        self.assertIn("ALERTA CONTROLADA", resp_sesion_invalida.text)
+        self.assertIn("No se pudo completar el análisis", resp_sesion_invalida.text)
+
+        resp_regen_invalida = self.client.post(
+            "/analizar/regenerar-resumen",
+            data={"session_id": "sesion-inexistente"},
+        )
+        self.assertEqual(resp_regen_invalida.status_code, 200)
+        self.assertIn("No se pudo regenerar el resumen", resp_regen_invalida.text)
+
+        resp_exp_invalida = self.client.post(
+            "/analizar/explicar-grafico",
+            data={"session_id": "sesion-inexistente", "tipo_grafico": "histograma"},
+        )
+        self.assertEqual(resp_exp_invalida.status_code, 200)
+        self.assertIn("No se pudo interpretar la gráfica", resp_exp_invalida.text)
 
 
 if __name__ == "__main__":

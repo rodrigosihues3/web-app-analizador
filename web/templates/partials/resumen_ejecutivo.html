@@ -1,0 +1,9 @@
+<div>
+    <h2 class="text-base sm:text-lg font-semibold text-primary heading-tight">
+        {{ contexto.titulo_reporte }}
+    </h2>
+    <p
+        class="text-sm text-secondary mt-1.5 leading-relaxed whitespace-pre-line"
+        {% if animar_escritura %}data-typewriter="true"{% endif %}
+    >{{ contexto.resumen_ejecutivo }}</p>
+</div>

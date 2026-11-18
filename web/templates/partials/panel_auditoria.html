@@ -1,215 +1,336 @@
-<div class="pila panel-auditoria">
-    <!-- Resumen -->
-    <section class="tarjeta" aria-labelledby="titulo-resumen">
-        <div class="tarjeta-cuerpo">
-            <h2 id="titulo-resumen" class="titulo-seccion">Resumen</h2>
-            <div class="sintesis-meta">
-                <span>{{ nombre_archivo }}</span>
-                <span class="mono">{{ session_id }}</span>
+{% from "macros/icons.html" import lucide_icon %}
+<div class="space-y-5">
+    <!-- 1. Tarjeta Resumen Compacta -->
+    <section class="surface-card p-5 space-y-4 animate-enter">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="text-xs font-mono font-medium text-primary px-2.5 py-0.5 badge-neutral">
+                    {{ nombre_archivo }}
+                </span>
                 {% if total_nulos > 0 %}
-                <span class="insignia insignia-warn">NULOS DETECTADOS: {{ total_nulos }}</span>
+                <span class="text-xs font-medium px-2.5 py-0.5 badge-warn tabular-nums">
+                    Nulos: {{ total_nulos }}
+                </span>
                 {% else %}
-                <span class="estado-ok"><span class="punto punto-ok" aria-hidden="true"></span>Sin nulos</span>
+                <span class="text-xs font-medium px-2.5 py-0.5 badge-ok">
+                    Sin nulos
+                </span>
                 {% endif %}
                 {% if total_outliers > 0 %}
-                <span class="insignia insignia-danger">OUTLIER IQR: {{ total_outliers }}</span>
+                <span class="text-xs font-medium px-2.5 py-0.5 badge-danger tabular-nums">
+                    Atípicos: {{ total_outliers }}
+                </span>
                 {% endif %}
             </div>
-            <h3 class="sintesis-titulo">{{ contexto.titulo_reporte }}</h3>
-            <p class="sintesis-texto">{{ contexto.resumen_ejecutivo }}</p>
+
+            <button
+                type="button"
+                hx-post="/analizar/regenerar-resumen"
+                hx-vals='{"session_id": "{{ session_id }}"}'
+                hx-target="#bloque-resumen-ejecutivo"
+                hx-swap="innerHTML"
+                hx-indicator="#indicador-resumen"
+                class="btn-ghost px-2.5 py-1 text-xs font-medium"
+                aria-label="Regenerar resumen"
+                title="Regenerar resumen"
+            >
+                <span class="hide-on-request inline-flex items-center gap-1.5">
+                    {{ lucide_icon("refresh-cw", "w-3.5 h-3.5") }}
+                    <span>Regenerar resumen</span>
+                </span>
+                <span id="indicador-resumen" class="htmx-indicator items-center gap-1.5 text-accent">
+                    <span class="icon-spin inline-flex">{{ lucide_icon("refresh-cw", "w-3.5 h-3.5") }}</span>
+                    <span>Actualizando...</span>
+                </span>
+            </button>
+        </div>
+
+        <div id="bloque-resumen-ejecutivo">
+            {% with animar_escritura=false %}
+                {% include "partials/resumen_ejecutivo.html" %}
+            {% endwith %}
+        </div>
+
+        <!-- Banda compacta de KPIs con tooltips ? -->
+        <div class="pt-4 border-t border-hairline grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div>
+                <div class="text-xs text-muted">Filas</div>
+                <div class="text-lg font-semibold font-mono text-primary tabular-nums mt-0.5">
+                    {{ auditoria.filas }}
+                </div>
+            </div>
+
+            <div>
+                <div class="text-xs text-muted">Columnas</div>
+                <div class="text-lg font-semibold font-mono text-primary tabular-nums mt-0.5">
+                    {{ auditoria.columnas }}
+                </div>
+            </div>
+
+            <div>
+                <div class="text-xs text-muted">Duplicados</div>
+                <div class="text-lg font-semibold font-mono text-primary tabular-nums mt-0.5">
+                    {{ auditoria.duplicados }}
+                </div>
+            </div>
+
+            <div>
+                <div class="flex items-center gap-1 text-xs text-muted">
+                    <span>Memoria</span>
+                    <span class="tooltip-wrapper">
+                        <button type="button" class="tooltip-trigger" aria-label="Qué significa Memoria">
+                            {{ lucide_icon("help-circle", "w-3.5 h-3.5") }}
+                        </button>
+                        <span class="tooltip-popover" role="tooltip">
+                            Mide el consumo aproximado en memoria RAM que ocupa la tabla original cargada.
+                        </span>
+                    </span>
+                </div>
+                <div class="text-lg font-semibold font-mono text-primary tabular-nums mt-0.5">
+                    {{ "%.1f"|format(auditoria.memoria_kb) }} KB
+                </div>
+            </div>
+
+            <div>
+                <div class="flex items-center gap-1 text-xs text-muted">
+                    <span>Varianza cero</span>
+                    <span class="tooltip-wrapper">
+                        <button type="button" class="tooltip-trigger" aria-label="Qué significa Varianza cero">
+                            {{ lucide_icon("help-circle", "w-3.5 h-3.5") }}
+                        </button>
+                        <span class="tooltip-popover" role="tooltip">
+                            Detecta columnas constantes cuyo valor nunca cambia y no aportan información estadística.
+                        </span>
+                    </span>
+                </div>
+                <div class="text-sm font-medium font-mono text-primary truncate mt-1.5" title="{{ auditoria.columnas_varianza_cero | join(', ') }}">
+                    {% if auditoria.columnas_varianza_cero %}
+                        {{ auditoria.columnas_varianza_cero | join(", ") }}
+                    {% else %}
+                        Ninguna
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </section>
 
-    <!-- Indicadores generales -->
-    <section class="rejilla-kpi" aria-label="Indicadores generales">
-        <div class="kpi">
-            <div class="kpi-etiqueta">Filas</div>
-            <div class="kpi-valor">{{ auditoria.filas }}</div>
-        </div>
-
-        <div class="kpi">
-            <div class="kpi-etiqueta">Columnas</div>
-            <div class="kpi-valor">{{ auditoria.columnas }}</div>
-        </div>
-
-        <div class="kpi">
-            <div class="kpi-etiqueta">
-                <span>Duplicados</span>
-                {% if auditoria.duplicados > 0 %}
-                <span class="insignia insignia-warn">Alerta</span>
-                {% endif %}
-            </div>
-            <div class="kpi-valor">{{ auditoria.duplicados }}</div>
-        </div>
-
-        <div class="kpi">
-            <div class="kpi-etiqueta">Memoria</div>
-            <div class="kpi-valor">{{ "%.2f"|format(auditoria.memoria_kb) }} <span class="etiqueta">KB</span></div>
-        </div>
-
-        <div class="kpi">
-            <div class="kpi-etiqueta">
-                <span>Varianza cero</span>
-                {% if auditoria.columnas_varianza_cero %}
-                <span class="insignia insignia-warn">Constante</span>
-                {% endif %}
-            </div>
-            {% if auditoria.columnas_varianza_cero %}
-            <div class="kpi-valor kpi-valor-texto" title="{{ auditoria.columnas_varianza_cero | join(', ') }}">
-                {{ auditoria.columnas_varianza_cero | join(", ") }}
-            </div>
-            {% else %}
-            <div class="kpi-valor">0</div>
-            {% endif %}
-        </div>
-    </section>
-
-    <!-- Calidad de los datos -->
-    <section class="tarjeta" aria-labelledby="titulo-calidad">
-        <div class="tarjeta-cabecera">
-            <h2 id="titulo-calidad" class="titulo-seccion">Calidad de los datos</h2>
-            <span class="subtitulo">Revisión por columna</span>
-        </div>
-
-        <div class="overflow-x-auto">
-            <table class="tabla">
-                <thead>
-                    <tr>
-                        <th scope="col">Columna</th>
-                        <th scope="col">Tipo</th>
-                        <th scope="col">Clase</th>
-                        <th scope="col" class="num">Nulos</th>
-                        <th scope="col" class="num">Únicos</th>
-                        <th scope="col">Outliers</th>
-                        <th scope="col">Estado</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in auditoria.esquema %}
-                    {% set info_outlier = auditoria.outliers_iqr.get(item.columna, {}) %}
-                    {% set cant_outlier = info_outlier.get("cantidad", 0) %}
-                    <tr>
-                        <td class="celda-titulo">{{ item.columna }}</td>
-                        <td class="celda-mono muted">{{ item.dtype }}</td>
-                        <td class="muted">{{ item.tipo_logico }}</td>
-                        <td class="num">{{ item.nulos }} <span class="muted">({{ "%.2f"|format(item.porcentaje_nulos) }}%)</span></td>
-                        <td class="num">{{ item.valores_unicos }}</td>
-                        <td class="celda-mono">
-                            {% if item.tipo_logico == "numerica" %}
-                                {{ cant_outlier }}
-                                {% if info_outlier.get("limite_inferior") is not none %}
-                                <span class="muted">[{{ "%.2f"|format(info_outlier.get("limite_inferior")) }} .. {{ "%.2f"|format(info_outlier.get("limite_superior")) }}]</span>
-                                {% endif %}
-                            {% else %}
-                                <span class="muted">—</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if item.nulos == 0 and cant_outlier == 0 and item.columna not in auditoria.columnas_varianza_cero %}
-                            <span class="estado-ok"><span class="punto punto-ok" aria-hidden="true"></span>OK</span>
-                            {% else %}
-                            <div class="celda-estados">
-                                {% if item.nulos > 0 %}
-                                <span class="insignia insignia-warn">NULOS DETECTADOS</span>
-                                {% endif %}
-                                {% if cant_outlier > 0 %}
-                                <span class="insignia insignia-danger">OUTLIER IQR</span>
-                                {% endif %}
-                                {% if item.columna in auditoria.columnas_varianza_cero %}
-                                <span class="insignia insignia-warn">VARIANZA CERO</span>
-                                {% endif %}
-                            </div>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </section>
-
-    <!-- Configuración del análisis -->
-    <section class="tarjeta" aria-labelledby="titulo-config">
-        <form
-            hx-post="/analizar/procesar"
-            hx-target="#resultados-analisis"
-            hx-indicator="#indicador-pipeline"
+    <!-- 2. Acordeón: Calidad de los datos -->
+    <section id="acordeon-calidad" class="surface-card accordion-card animate-enter delay-1">
+        <button
+            type="button"
+            data-accordion-trigger
+            aria-expanded="true"
+            onclick="window.toggleAccordion('acordeon-calidad')"
+            class="w-full px-5 py-3.5 flex items-center justify-between text-left"
         >
-            <div class="tarjeta-cuerpo pila-md">
-                <input type="hidden" name="session_id" value="{{ session_id }}">
+            <div class="flex items-center gap-2.5">
+                <h3 class="text-sm font-semibold text-primary">Calidad de los datos</h3>
+                <span class="text-xs text-muted tabular-nums">({{ auditoria.esquema | length }} columnas)</span>
+            </div>
+            <span class="accordion-chevron text-muted">
+                {{ lucide_icon("chevron-down", "w-4 h-4") }}
+            </span>
+        </button>
 
-                <div>
-                    <h2 id="titulo-config" class="titulo-seccion">Configuración del análisis</h2>
-                    <p class="subtitulo">Elige cómo limpiar los datos y qué comparar.</p>
-                </div>
-
-                <div class="rejilla-3">
-                    <div>
-                        <label for="select-estrategia-nulos" class="campo-etiqueta">Valores nulos</label>
-                        <p class="campo-ayuda">Cómo completar los datos faltantes.</p>
-                        <select id="select-estrategia-nulos" name="estrategia_nulos" class="control">
-                            <option value="mediana" selected>Mediana (moda en categorías)</option>
-                            <option value="media">Media</option>
-                            <option value="moda">Moda</option>
-                            <option value="eliminar">Eliminar filas con nulos</option>
-                            <option value="ninguna">No modificar</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label for="select-col-categoria" class="campo-etiqueta">Agrupar por</label>
-                        <p class="campo-ayuda">Columna de categorías a comparar.</p>
-                        <select id="select-col-categoria" name="col_categoria" class="control">
-                            {% for col_cat in columnas_categoricas %}
-                            <option value="{{ col_cat }}" {% if col_cat == col_categoria_default %}selected{% endif %}>
-                                {{ col_cat }}
-                            </option>
+        <div class="accordion-body">
+            <div class="accordion-inner border-t border-hairline">
+                <div class="overflow-x-auto">
+                    <table class="data-table text-xs">
+                        <thead>
+                            <tr>
+                                <th class="text-left">Columna</th>
+                                <th class="text-left">Tipo de dato</th>
+                                <th class="text-right">Nulos</th>
+                                <th class="text-right">Únicos</th>
+                                <th class="text-right">Atípicos</th>
+                                <th class="text-left">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in auditoria.esquema %}
+                            {% set info_outlier = auditoria.outliers_iqr.get(item.columna, {}) %}
+                            {% set cant_outlier = info_outlier.get("cantidad", 0) %}
+                            <tr>
+                                <td class="font-medium text-primary">{{ item.columna }}</td>
+                                <td class="text-secondary">
+                                    <span>{{ item.tipo_logico }}</span>
+                                    <span class="font-mono text-muted ml-1">({{ item.dtype }})</span>
+                                </td>
+                                <td class="text-right font-mono tabular-nums">
+                                    {{ item.nulos }} <span class="text-muted">({{ "%.1f"|format(item.porcentaje_nulos) }}%)</span>
+                                </td>
+                                <td class="text-right font-mono tabular-nums">
+                                    {{ item.valores_unicos }}
+                                </td>
+                                <td class="text-right font-mono tabular-nums">
+                                    {% if item.tipo_logico == "numerica" %}
+                                        {{ cant_outlier }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.columna in auditoria.columnas_varianza_cero %}
+                                        <span class="inline-block px-2 py-0.5 text-xs font-medium badge-neutral">Constante</span>
+                                    {% elif cant_outlier > 0 and item.nulos > 0 %}
+                                        <span class="inline-block px-2 py-0.5 text-xs font-medium badge-danger">Nulos y atípicos</span>
+                                    {% elif cant_outlier > 0 %}
+                                        <span class="inline-block px-2 py-0.5 text-xs font-medium badge-danger">Atípicos</span>
+                                    {% elif item.nulos > 0 %}
+                                        <span class="inline-block px-2 py-0.5 text-xs font-medium badge-warn">Con nulos</span>
+                                    {% else %}
+                                        <span class="inline-block px-2 py-0.5 text-xs font-medium badge-ok">Correcto</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
                             {% endfor %}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label for="select-col-numerica" class="campo-etiqueta">Métrica</label>
-                        <p class="campo-ayuda">Columna numérica a analizar.</p>
-                        <select id="select-col-numerica" name="col_numerica" class="control">
-                            {% for col_num in columnas_numericas %}
-                            <option value="{{ col_num }}" {% if col_num == col_numerica_default %}selected{% endif %}>
-                                {{ col_num }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-
-                <div class="rejilla-2 rejilla-compacta">
-                    <label class="opcion">
-                        <input type="checkbox" name="eliminar_duplicados" value="true" checked>
-                        <span>
-                            <span class="opcion-titulo">Eliminar filas duplicadas</span>
-                            <span class="opcion-ayuda">Conserva solo la primera aparición.</span>
-                        </span>
-                    </label>
-
-                    <label class="opcion">
-                        <input type="checkbox" name="recortar_outliers" value="true" checked>
-                        <span>
-                            <span class="opcion-titulo">Limitar valores extremos</span>
-                            <span class="opcion-ayuda">Ajusta los atípicos al rango habitual.</span>
-                        </span>
-                    </label>
-                </div>
-
-                <div class="barra-formulario">
-                    <div id="indicador-pipeline" class="htmx-indicator indicador" role="status" aria-live="polite">
-                        <span class="spinner" aria-hidden="true"></span>
-                        <span>Procesando…</span>
-                    </div>
-                    <button type="submit" class="btn btn-primario">Ejecutar análisis</button>
+                        </tbody>
+                    </table>
                 </div>
             </div>
-        </form>
+        </div>
     </section>
 
-    <!-- Destino de los resultados -->
-    <div id="resultados-analisis" class="pila"></div>
+    <!-- 3. Acordeón: Configuración del análisis -->
+    <section id="acordeon-configuracion" class="surface-card accordion-card animate-enter delay-2">
+        <button
+            type="button"
+            data-accordion-trigger
+            aria-expanded="true"
+            onclick="window.toggleAccordion('acordeon-configuracion')"
+            class="w-full px-5 py-3.5 flex items-center justify-between text-left"
+        >
+            <div>
+                <h3 class="text-sm font-semibold text-primary">Configuración del análisis</h3>
+            </div>
+            <span class="accordion-chevron text-muted">
+                {{ lucide_icon("chevron-down", "w-4 h-4") }}
+            </span>
+        </button>
+
+        <div class="accordion-body">
+            <div class="accordion-inner border-t border-hairline">
+                <form
+                    hx-post="/analizar/procesar"
+                    hx-target="#resultados-analisis"
+                    hx-indicator="#indicador-pipeline"
+                    class="p-5 space-y-5"
+                >
+                    <input type="hidden" name="session_id" value="{{ session_id }}">
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <div class="flex items-center gap-1 mb-1.5">
+                                <label for="select-estrategia-nulos" class="text-xs font-medium text-secondary">
+                                    Valores nulos
+                                </label>
+                                <span class="tooltip-wrapper">
+                                    <button type="button" class="tooltip-trigger" aria-label="Ayuda sobre Valores nulos">
+                                        {{ lucide_icon("help-circle", "w-3.5 h-3.5") }}
+                                    </button>
+                                    <span class="tooltip-popover" role="tooltip">
+                                        Mediana: valor central (resiste extremos). Media: promedio aritmético. Moda: valor más frecuente. Eliminar: descarta filas incompletas.
+                                    </span>
+                                </span>
+                            </div>
+                            <select id="select-estrategia-nulos" name="estrategia_nulos" class="form-control w-full px-3 py-2 text-xs">
+                                <option value="mediana" selected>Imputar con mediana</option>
+                                <option value="media">Imputar con media</option>
+                                <option value="moda">Imputar con moda</option>
+                                <option value="eliminar">Eliminar filas con nulos</option>
+                                <option value="ninguna">Conservar sin cambios</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="select-col-categoria" class="block text-xs font-medium text-secondary mb-1.5">
+                                Agrupar por (categoría)
+                            </label>
+                            <select id="select-col-categoria" name="col_categoria" class="form-control w-full px-3 py-2 text-xs">
+                                {% for col_cat in columnas_categoricas %}
+                                <option value="{{ col_cat }}" {% if col_cat == col_categoria_default %}selected{% endif %}>
+                                    {{ col_cat }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="select-col-numerica" class="block text-xs font-medium text-secondary mb-1.5">
+                                Métrica principal (numérica)
+                            </label>
+                            <select id="select-col-numerica" name="col_numerica" class="form-control w-full px-3 py-2 text-xs">
+                                {% for col_num in columnas_numericas %}
+                                <option value="{{ col_num }}" {% if col_num == col_numerica_default %}selected{% endif %}>
+                                    {{ col_num }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <label class="surface-subtle p-3.5 flex items-start gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                name="eliminar_duplicados"
+                                value="true"
+                                checked
+                                class="mt-0.5 h-4 w-4 rounded"
+                            >
+                            <div>
+                                <span class="block text-xs font-medium text-primary">Eliminar filas duplicadas</span>
+                                <span class="block text-xs text-muted mt-0.5">
+                                    Mantiene una única copia de registros repetidos exactos.
+                                </span>
+                            </div>
+                        </label>
+
+                        <div class="surface-subtle p-3.5 flex items-start gap-3">
+                            <input
+                                id="chk-outliers"
+                                type="checkbox"
+                                name="recortar_outliers"
+                                value="true"
+                                checked
+                                class="mt-0.5 h-4 w-4 rounded cursor-pointer"
+                            >
+                            <div class="flex-1">
+                                <div class="flex items-center gap-1">
+                                    <label for="chk-outliers" class="text-xs font-medium text-primary cursor-pointer">
+                                        Limitar valores extremos
+                                    </label>
+                                    <span class="tooltip-wrapper">
+                                        <button type="button" class="tooltip-trigger" aria-label="Ayuda sobre Limitar valores extremos">
+                                            {{ lucide_icon("help-circle", "w-3.5 h-3.5") }}
+                                        </button>
+                                        <span class="tooltip-popover" role="tooltip">
+                                            Acota cifras atípicas hacia los límites del rango intercuartílico (Q1 − 1.5·IQR y Q3 + 1.5·IQR) para evitar distorsiones en promedios y gráficas.
+                                        </span>
+                                    </span>
+                                </div>
+                                <span class="block text-xs text-muted mt-0.5">
+                                    Ajusta valores fuera del rango estadístico normal sin eliminar filas.
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-hairline">
+                        <div id="indicador-pipeline" class="htmx-indicator items-center gap-2 text-xs text-secondary">
+                            <span class="icon-spin inline-flex">{{ lucide_icon("refresh-cw", "w-3.5 h-3.5") }}</span>
+                            <span>Procesando datos y generando visualizaciones...</span>
+                        </div>
+
+                        <button type="submit" class="btn-primary px-5 py-2 text-sm ml-auto">
+                            Ejecutar análisis
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. Contenedor de Resultados -->
+    <div id="resultados-analisis" class="space-y-5"></div>
 </div>

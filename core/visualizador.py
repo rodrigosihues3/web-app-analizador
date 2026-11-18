@@ -15,19 +15,24 @@ import plotly.graph_objects as go
 
 logger = logging.getLogger(__name__)
 
-COLOR_PRIMARIO = "#0f172a"
-COLOR_ACENTO = "#2563eb"
-COLOR_SECUNDARIO = "#475569"
-COLOR_GRILLA = "#e2e8f0"
+COLOR_PRIMARIO = "#18181b"
+COLOR_ACENTO = "#0f766e"
+COLOR_SECUNDARIO = "#52525b"
+COLOR_TERCIARIO = "#71717a"
+COLOR_GRILLA = "#e7e5e4"
 COLOR_FONDO = "#ffffff"
 PALETA_CORPORATIVA: tuple[str, ...] = (
-    "#2563eb",
-    "#0f172a",
-    "#475569",
-    "#3b82f6",
-    "#1e293b",
-    "#64748b",
+    "#0f766e",
+    "#18181b",
+    "#52525b",
+    "#0d9488",
+    "#27272a",
+    "#71717a",
 )
+PLOTLY_CONFIG: dict[str, bool] = {
+    "displayModeBar": False,
+    "responsive": True,
+}
 
 
 def _validar_columna_numerica(df: pd.DataFrame, columna: str) -> pd.Series:
@@ -51,33 +56,42 @@ def _validar_columna_numerica(df: pd.DataFrame, columna: str) -> pd.Series:
 
 
 def _aplicar_layout_corporativo(fig: go.Figure, titulo: str) -> go.Figure:
-    """Aplica estilo sobrio corporativo con fondo blanco a figuras Plotly."""
+    """Aplica estilo sobrio minimalista con fondo transparente a figuras Plotly."""
+    fuente = "Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif"
     fig.update_layout(
         title={
             "text": titulo,
-            "font": {"size": 16, "color": COLOR_PRIMARIO, "family": "Arial"},
-            "x": 0.02,
+            "font": {"size": 14, "color": COLOR_PRIMARIO, "family": fuente},
+            "x": 0.01,
         },
-        paper_bgcolor=COLOR_FONDO,
-        plot_bgcolor=COLOR_FONDO,
-        font={"color": COLOR_PRIMARIO, "family": "Arial", "size": 12},
-        margin={"l": 50, "r": 25, "t": 55, "b": 45},
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font={"color": COLOR_PRIMARIO, "family": fuente, "size": 12},
+        hovermode="closest",
+        hoverlabel={
+            "bgcolor": "#18181b",
+            "bordercolor": "#27272a",
+            "font": {"color": "#fafafa", "family": fuente, "size": 12},
+        },
+        margin={"l": 48, "r": 20, "t": 48, "b": 44},
         xaxis={
             "gridcolor": COLOR_GRILLA,
-            "linecolor": COLOR_SECUNDARIO,
+            "linecolor": COLOR_GRILLA,
             "zerolinecolor": COLOR_GRILLA,
+            "tickfont": {"color": COLOR_SECUNDARIO, "size": 11},
         },
         yaxis={
             "gridcolor": COLOR_GRILLA,
-            "linecolor": COLOR_SECUNDARIO,
+            "linecolor": COLOR_GRILLA,
             "zerolinecolor": COLOR_GRILLA,
+            "tickfont": {"color": COLOR_SECUNDARIO, "size": 11},
         },
     )
     return fig
 
 
 def generar_histograma_plotly(df: pd.DataFrame, columna: str) -> str:
-    """Genera un fragmento HTML de histograma interactivo Plotly.
+    """Genera un fragmento HTML de histograma interactivo con Media, Mediana y Moda.
 
     Args:
         df: DataFrame fuente.
@@ -85,27 +99,147 @@ def generar_histograma_plotly(df: pd.DataFrame, columna: str) -> str:
 
     Returns:
         Fragmento HTML generado mediante ``to_html(include_plotlyjs=False,
-        full_html=False)``.
+        full_html=False, config=PLOTLY_CONFIG)``.
     """
     serie = _validar_columna_numerica(df, columna)
+    media = float(serie.mean())
+    mediana = float(serie.median())
+    modas = serie.mode(dropna=True)
+    moda = float(modas.iloc[0]) if not modas.empty else None
 
     fig = go.Figure(
         data=[
             go.Histogram(
                 x=serie.tolist(),
                 marker={
-                    "color": COLOR_ACENTO,
-                    "line": {"color": COLOR_PRIMARIO, "width": 1},
+                    "color": "rgba(15, 118, 110, 0.78)",
+                    "line": {"color": "#115e59", "width": 1},
                 },
-                opacity=0.88,
                 name=columna,
+                hovertemplate=f"{columna}: %{{x}}<br>Frecuencia: %{{y}}<extra></extra>",
             )
         ]
     )
+
+    marcadores: list[tuple[str, float, str, str, float]] = [
+        ("Media", media, COLOR_ACENTO, "dash", 0.99),
+        ("Mediana", mediana, COLOR_PRIMARIO, "solid", 0.88),
+    ]
+    if moda is not None:
+        marcadores.append(("Moda", moda, COLOR_TERCIARIO, "dot", 0.77))
+
+    for nombre, valor, color, trazo, pos_y in marcadores:
+        fig.add_vline(
+            x=valor,
+            line_width=2,
+            line_dash=trazo,
+            line_color=color,
+        )
+        fig.add_annotation(
+            x=valor,
+            y=pos_y,
+            yref="paper",
+            text=f"{nombre}: {valor:.2f}",
+            showarrow=False,
+            xanchor="left",
+            yanchor="top",
+            xshift=5,
+            font={"size": 11, "color": color},
+            bgcolor="rgba(255,255,255,0.88)",
+            borderpad=2,
+        )
+
     _aplicar_layout_corporativo(fig, f"Distribución de {columna}")
     fig.update_xaxes(title_text=columna)
     fig.update_yaxes(title_text="Frecuencia")
-    return fig.to_html(include_plotlyjs=False, full_html=False)
+    return fig.to_html(
+        include_plotlyjs=False,
+        full_html=False,
+        config=PLOTLY_CONFIG,
+    )
+
+
+def generar_barras_categoria_plotly(
+    df: pd.DataFrame, col_metrica: str, col_grupo: str
+) -> str:
+    """Genera un gráfico de barras ordenado por promedio de categoría (top 12).
+
+    Incluye etiquetas directas sobre cada barra y una línea punteada de
+    referencia para el promedio general.
+    """
+    _validar_columna_numerica(df, col_metrica)
+    if col_grupo not in df.columns:
+        raise KeyError(
+            f"La columna de agrupación '{col_grupo}' no existe en el dataset."
+        )
+
+    df_val = df[[col_metrica, col_grupo]].dropna()
+    if df_val.empty:
+        raise ValueError(
+            f"No hay datos válidos para '{col_metrica}' agrupados por '{col_grupo}'."
+        )
+
+    promedio_general = float(df_val[col_metrica].astype(float).mean())
+    agrupado = (
+        df_val.groupby(df_val[col_grupo].astype(str), observed=True)[col_metrica]
+        .mean()
+        .sort_values(ascending=False)
+        .head(12)
+    )
+
+    categorias = agrupado.index.tolist()
+    promedios = [round(float(v), 2) for v in agrupado.values]
+
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=categorias,
+                y=promedios,
+                text=[f"{v:.2f}" for v in promedios],
+                textposition="outside",
+                textfont={"size": 11, "color": COLOR_SECUNDARIO},
+                marker={"color": COLOR_ACENTO, "opacity": 0.9},
+                hovertemplate="%{x}<br>Promedio: %{y:.2f}<extra></extra>",
+                name=col_metrica,
+            )
+        ]
+    )
+
+    fig.add_hline(
+        y=promedio_general,
+        line_width=1.5,
+        line_dash="dot",
+        line_color=COLOR_PRIMARIO,
+    )
+    fig.add_annotation(
+        x=0.99,
+        xref="paper",
+        y=promedio_general,
+        text=f"Promedio general: {promedio_general:.2f}",
+        showarrow=False,
+        xanchor="right",
+        yanchor="bottom",
+        yshift=4,
+        font={"size": 11, "color": COLOR_PRIMARIO},
+        bgcolor="rgba(255,255,255,0.88)",
+        borderpad=2,
+    )
+
+    _aplicar_layout_corporativo(
+        fig, f"Promedio de {col_metrica} por {col_grupo}"
+    )
+    max_y = max(promedios + [promedio_general])
+    min_y = min(promedios + [0.0])
+    techo_y = max_y * 1.18 if max_y > 0 else 1.0
+    piso_y = min_y * 1.12 if min_y < 0 else 0.0
+
+    fig.update_xaxes(title_text=col_grupo)
+    fig.update_yaxes(title_text=f"Promedio ({col_metrica})", range=[piso_y, techo_y])
+    return fig.to_html(
+        include_plotlyjs=False,
+        full_html=False,
+        config=PLOTLY_CONFIG,
+    )
 
 
 def generar_boxplot_plotly(
@@ -172,7 +306,11 @@ def generar_boxplot_plotly(
     _aplicar_layout_corporativo(fig, titulo)
     fig.update_yaxes(title_text=columna)
     fig.update_layout(showlegend=bool(col_grupo))
-    return fig.to_html(include_plotlyjs=False, full_html=False)
+    return fig.to_html(
+        include_plotlyjs=False,
+        full_html=False,
+        config=PLOTLY_CONFIG,
+    )
 
 
 def generar_heatmap_plotly(df: pd.DataFrame) -> str:
@@ -209,7 +347,11 @@ def generar_heatmap_plotly(df: pd.DataFrame) -> str:
         )
         fig.update_xaxes(visible=False)
         fig.update_yaxes(visible=False)
-        return fig.to_html(include_plotlyjs=False, full_html=False)
+        return fig.to_html(
+            include_plotlyjs=False,
+            full_html=False,
+            config=PLOTLY_CONFIG,
+        )
 
     corr = df[cols_num].corr(method="pearson").round(3).fillna(0.0)
     z_vals = corr.values.tolist()
@@ -225,9 +367,9 @@ def generar_heatmap_plotly(df: pd.DataFrame) -> str:
                 texttemplate="%{text}",
                 textfont={"color": COLOR_PRIMARIO, "size": 11},
                 colorscale=[
-                    [0.0, "#475569"],
-                    [0.5, "#f8fafc"],
-                    [1.0, "#2563eb"],
+                    [0.0, "#71717a"],
+                    [0.5, "#f5f5f4"],
+                    [1.0, "#0f766e"],
                 ],
                 zmin=-1.0,
                 zmax=1.0,
@@ -237,7 +379,11 @@ def generar_heatmap_plotly(df: pd.DataFrame) -> str:
     )
     _aplicar_layout_corporativo(fig, "Matriz de Correlación (Pearson)")
     fig.update_yaxes(autorange="reversed")
-    return fig.to_html(include_plotlyjs=False, full_html=False)
+    return fig.to_html(
+        include_plotlyjs=False,
+        full_html=False,
+        config=PLOTLY_CONFIG,
+    )
 
 
 def _guardar_figura_bytes(fig: plt.Figure) -> io.BytesIO:

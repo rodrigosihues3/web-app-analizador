@@ -1,123 +1,138 @@
-<div class="pila">
-    <!-- Resultados -->
-    <section class="tarjeta" aria-labelledby="titulo-resultados">
-        <div class="tarjeta-cuerpo pila-md">
-            <div class="cabecera-seccion">
+{% from "macros/icons.html" import lucide_icon %}
+<div class="space-y-5">
+    <!-- 1. Barra Única de Estado y Exportación -->
+    <section class="surface-card p-4 sm:p-5 space-y-3 animate-enter">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+                <span class="text-accent inline-flex">
+                    {{ lucide_icon("check-circle", "w-4 h-4") }}
+                </span>
                 <div>
-                    <h2 id="titulo-resultados" class="titulo-seccion titulo-grande">Resultados</h2>
-                    <p class="subtitulo">
-                        <span class="estado-ok"><span class="punto punto-ok" aria-hidden="true"></span>Análisis completado</span>
-                        · <span class="mono">{{ filas_limpias }}</span> de <span class="mono">{{ filas_originales }}</span> filas
-                        · Nulos: {{ config_limpieza.estrategia_nulos }}
+                    <h3 class="text-sm font-semibold text-primary">Resultados del análisis</h3>
+                    <p class="text-xs text-muted tabular-nums">
+                        {{ filas_limpias }} de {{ filas_originales }} registros conservados
                     </p>
                 </div>
-
-                <div class="acciones" role="group" aria-label="Exportar resultados">
-                    <a href="/export/dataset/{{ session_id }}?formato=csv" class="btn">CSV</a>
-                    <a href="/export/dataset/{{ session_id }}?formato=xlsx" class="btn">Excel</a>
-                    <a href="/export/pdf/{{ session_id }}" class="btn">PDF</a>
-                </div>
             </div>
 
-            <div>
-                <h3 class="campo-etiqueta">Cambios aplicados</h3>
-                <ul class="bitacora">
-                    {% for registro_log in logs_limpieza %}
-                    <li>{{ registro_log }}</li>
-                    {% endfor %}
-                </ul>
+            <div class="flex flex-wrap items-center gap-2">
+                <a
+                    href="/export/dataset/{{ session_id }}?formato=csv"
+                    class="btn-secondary px-3 py-1.5 text-xs no-underline"
+                >
+                    {{ lucide_icon("file-text", "w-3.5 h-3.5") }}
+                    <span>CSV</span>
+                </a>
+                <a
+                    href="/export/dataset/{{ session_id }}?formato=xlsx"
+                    class="btn-secondary px-3 py-1.5 text-xs no-underline"
+                >
+                    {{ lucide_icon("file-spreadsheet", "w-3.5 h-3.5") }}
+                    <span>Excel</span>
+                </a>
+                <a
+                    href="/export/pdf/{{ session_id }}"
+                    class="btn-primary px-3.5 py-1.5 text-xs no-underline"
+                >
+                    {{ lucide_icon("download", "w-3.5 h-3.5") }}
+                    <span>PDF</span>
+                </a>
             </div>
         </div>
+
+        <details class="text-xs pt-2 border-t border-hairline">
+            <summary class="cursor-pointer text-secondary hover:text-primary font-medium select-none">
+                Ver detalle de limpieza ({{ logs_limpieza | length }} pasos aplicados)
+            </summary>
+            <ul class="mt-2.5 space-y-1 text-secondary pl-4 list-disc">
+                {% for registro_log in logs_limpieza %}
+                <li>{{ registro_log }}</li>
+                {% endfor %}
+            </ul>
+        </details>
     </section>
 
-    <!-- Valores clave -->
+    <!-- 2. Indicadores de Valores Clave -->
     {% if valores_clave %}
-    <section aria-labelledby="titulo-valores-clave">
-        <div class="cabecera-seccion">
-            <h2 id="titulo-valores-clave" class="titulo-seccion titulo-grande">Valores clave</h2>
-            <span class="subtitulo">{{ valores_clave.col_metrica }} por {{ valores_clave.col_categoria }}</span>
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-enter delay-1">
+        <div class="surface-card p-4 space-y-1">
+            <div class="text-xs text-muted">Registro máximo global</div>
+            <div class="text-xl font-semibold font-mono text-primary tabular-nums">
+                {{ "%.2f"|format(valores_clave.valor_maximo) }}
+            </div>
+            <div class="text-xs text-accent font-medium truncate">
+                {{ valores_clave.col_categoria }}: {{ valores_clave.registro_maximo.get(valores_clave.col_categoria, "N/A") }}
+            </div>
         </div>
 
-        <div class="rejilla-kpi rejilla-kpi-ancha">
-            <div class="kpi">
-                <div class="kpi-etiqueta">Registro Máximo Global</div>
-                <div class="kpi-valor">{{ "%.2f"|format(valores_clave.valor_maximo) }}</div>
-                <div class="kpi-nota">{{ valores_clave.col_categoria }}: {{ valores_clave.registro_maximo.get(valores_clave.col_categoria, "N/A") }}</div>
-                <div class="kpi-detalle">
-                    {% for k, v in valores_clave.registro_maximo.items() %}
-                    {% if loop.index <= 3 %}
-                    <div>{{ k }}: {{ v }}</div>
-                    {% endif %}
-                    {% endfor %}
-                </div>
+        <div class="surface-card p-4 space-y-1">
+            <div class="text-xs text-muted">Registro mínimo global</div>
+            <div class="text-xl font-semibold font-mono text-primary tabular-nums">
+                {{ "%.2f"|format(valores_clave.valor_minimo) }}
             </div>
-
-            <div class="kpi">
-                <div class="kpi-etiqueta">Registro Mínimo Global</div>
-                <div class="kpi-valor">{{ "%.2f"|format(valores_clave.valor_minimo) }}</div>
-                <div class="kpi-nota">{{ valores_clave.col_categoria }}: {{ valores_clave.registro_minimo.get(valores_clave.col_categoria, "N/A") }}</div>
-                <div class="kpi-detalle">
-                    {% for k, v in valores_clave.registro_minimo.items() %}
-                    {% if loop.index <= 3 %}
-                    <div>{{ k }}: {{ v }}</div>
-                    {% endif %}
-                    {% endfor %}
-                </div>
+            <div class="text-xs text-secondary truncate">
+                {{ valores_clave.col_categoria }}: {{ valores_clave.registro_minimo.get(valores_clave.col_categoria, "N/A") }}
             </div>
+        </div>
 
-            <div class="kpi">
-                <div class="kpi-etiqueta">Categoría Líder en Promedio</div>
-                <div class="kpi-valor">{{ "%.2f"|format(valores_clave.categoria_lider_promedio.promedio) }}</div>
-                <div class="kpi-nota">{{ valores_clave.categoria_lider_promedio.categoria }}</div>
+        <div class="surface-card p-4 space-y-1">
+            <div class="text-xs text-muted">Categoría líder en promedio</div>
+            <div class="text-base font-semibold text-primary truncate">
+                {{ valores_clave.categoria_lider_promedio.categoria }}
             </div>
+            <div class="text-xs font-mono text-accent tabular-nums">
+                Promedio: {{ "%.2f"|format(valores_clave.categoria_lider_promedio.promedio) }}
+            </div>
+        </div>
 
-            <div class="kpi">
-                <div class="kpi-etiqueta">Categoría Líder en Acumulado</div>
-                <div class="kpi-valor">{{ "%.2f"|format(valores_clave.categoria_lider_acumulado.acumulado) }}</div>
-                <div class="kpi-nota">{{ valores_clave.categoria_lider_acumulado.categoria }}</div>
+        <div class="surface-card p-4 space-y-1">
+            <div class="text-xs text-muted">Categoría líder en acumulado</div>
+            <div class="text-base font-semibold text-primary truncate">
+                {{ valores_clave.categoria_lider_acumulado.categoria }}
+            </div>
+            <div class="text-xs font-mono text-secondary tabular-nums">
+                Total: {{ "%.2f"|format(valores_clave.categoria_lider_acumulado.acumulado) }}
             </div>
         </div>
     </section>
     {% endif %}
 
-    <!-- Estadística descriptiva -->
-    <section class="tarjeta" aria-labelledby="titulo-estadistica">
-        <div class="tarjeta-cabecera">
-            <h2 id="titulo-estadistica" class="titulo-seccion">Estadística descriptiva</h2>
-            <span class="subtitulo">Datos depurados</span>
+    <!-- 3. Tabla de Estadística Descriptiva -->
+    <section class="surface-card overflow-hidden animate-enter delay-2">
+        <div class="px-5 py-3.5 border-b border-hairline flex items-center justify-between">
+            <h4 class="text-sm font-semibold text-primary">Estadística descriptiva</h4>
+            <span class="text-xs text-muted">Variables numéricas depuradas</span>
         </div>
 
         <div class="overflow-x-auto">
-            <table class="tabla">
+            <table class="data-table text-xs">
                 <thead>
                     <tr>
-                        <th scope="col">Columna</th>
-                        <th scope="col" class="num">N</th>
-                        <th scope="col" class="num">Media</th>
-                        <th scope="col" class="num">Mediana</th>
-                        <th scope="col" class="num">Desv. est.</th>
-                        <th scope="col" class="num">Varianza</th>
-                        <th scope="col" class="num">Mín</th>
-                        <th scope="col" class="num">Máx</th>
-                        <th scope="col" class="num">Q25</th>
-                        <th scope="col" class="num">Q75</th>
-                        <th scope="col" class="num">Asimetría</th>
+                        <th class="text-left">Columna</th>
+                        <th class="text-right">N</th>
+                        <th class="text-right">Media</th>
+                        <th class="text-right">Mediana</th>
+                        <th class="text-right">Desv. Est.</th>
+                        <th class="text-right">Mín</th>
+                        <th class="text-right">Máx</th>
+                        <th class="text-right">Q25</th>
+                        <th class="text-right">Q75</th>
+                        <th class="text-right">Asimetría</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for st in estadisticas %}
                     <tr>
-                        <td class="celda-titulo">{{ st.columna }}</td>
-                        <td class="num">{{ st.conteo }}</td>
-                        <td class="num">{{ "%.4f"|format(st.media) }}</td>
-                        <td class="num">{{ "%.4f"|format(st.mediana) }}</td>
-                        <td class="num">{{ "%.4f"|format(st.desviacion_estandar) }}</td>
-                        <td class="num">{{ "%.4f"|format(st.varianza) }}</td>
-                        <td class="num">{{ "%.4f"|format(st.minimo) }}</td>
-                        <td class="num">{{ "%.4f"|format(st.maximo) }}</td>
-                        <td class="num">{{ "%.4f"|format(st.q25) }}</td>
-                        <td class="num">{{ "%.4f"|format(st.q75) }}</td>
-                        <td class="num">{{ "%.4f"|format(st.asimetria) }}</td>
+                        <td class="font-medium text-primary">{{ st.columna }}</td>
+                        <td class="text-right font-mono tabular-nums text-secondary">{{ st.conteo }}</td>
+                        <td class="text-right font-mono tabular-nums font-medium">{{ "%.2f"|format(st.media) }}</td>
+                        <td class="text-right font-mono tabular-nums font-medium">{{ "%.2f"|format(st.mediana) }}</td>
+                        <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.desviacion_estandar) }}</td>
+                        <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.minimo) }}</td>
+                        <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.maximo) }}</td>
+                        <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.q25) }}</td>
+                        <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.q75) }}</td>
+                        <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.asimetria) }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -125,44 +140,135 @@
         </div>
     </section>
 
-    <!-- Gráficos -->
-    <section aria-labelledby="titulo-graficos">
-        <div class="cabecera-seccion">
-            <h2 id="titulo-graficos" class="titulo-seccion titulo-grande">Gráficos</h2>
-        </div>
-
-        <div class="pila-lg">
-            <div class="rejilla-graficos">
-                <div class="tarjeta tarjeta-recorte">
-                    <div class="tarjeta-cabecera">
-                        <h3 class="titulo-seccion">Histograma</h3>
-                        <span class="subtitulo">{{ config_limpieza.col_numerica }}</span>
-                    </div>
-                    <div class="plotly-container" id="contenedor-plotly-histograma">
-                        {{ grafico_histograma | safe }}
-                    </div>
+    <!-- 4. Visualizaciones Interactivas y Explicabilidad IA -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <!-- Gráfico 1: Histograma -->
+        <article class="surface-card flex flex-col justify-between animate-enter delay-2">
+            <div class="px-5 py-3.5 border-b border-hairline flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5">
+                    <h4 class="text-sm font-semibold text-primary">
+                        Histograma (Media, Mediana y Moda)
+                    </h4>
+                    <span class="tooltip-wrapper">
+                        <button type="button" class="tooltip-trigger" aria-label="Qué muestra el histograma">
+                            {{ lucide_icon("help-circle", "w-3.5 h-3.5") }}
+                        </button>
+                        <span class="tooltip-popover" role="tooltip">
+                            Muestra cómo se distribuyen los valores de {{ config_limpieza.col_numerica }} junto con las líneas de tendencia central (media, mediana y moda).
+                        </span>
+                    </span>
                 </div>
 
-                <div class="tarjeta tarjeta-recorte">
-                    <div class="tarjeta-cabecera">
-                        <h3 class="titulo-seccion">Diagrama de caja</h3>
-                        <span class="subtitulo">{{ config_limpieza.col_numerica }} por {{ config_limpieza.col_categoria }}</span>
-                    </div>
-                    <div class="plotly-container" id="contenedor-plotly-boxplot">
-                        {{ grafico_boxplot | safe }}
-                    </div>
-                </div>
+                <button
+                    type="button"
+                    hx-post="/analizar/explicar-grafico"
+                    hx-vals='{"session_id": "{{ session_id }}", "tipo_grafico": "histograma", "col_numerica": "{{ config_limpieza.col_numerica }}", "col_categoria": "{{ config_limpieza.col_categoria }}"}'
+                    hx-target="#explicacion-histograma"
+                    hx-indicator="#spin-histograma"
+                    class="btn-secondary px-2.5 py-1 text-xs"
+                >
+                    <span class="hide-on-request inline-flex items-center gap-1.5">
+                        {{ lucide_icon("sparkles", "w-3.5 h-3.5 text-accent") }}
+                        <span>Analizar con IA</span>
+                    </span>
+                    <span id="spin-histograma" class="htmx-indicator items-center gap-1.5 text-accent">
+                        <span class="icon-spin inline-flex">{{ lucide_icon("refresh-cw", "w-3.5 h-3.5") }}</span>
+                        <span>Analizando...</span>
+                    </span>
+                </button>
             </div>
 
-            <div class="tarjeta tarjeta-recorte">
-                <div class="tarjeta-cabecera">
-                    <h3 class="titulo-seccion">Mapa de calor</h3>
-                    <span class="subtitulo">Correlación entre variables numéricas</span>
-                </div>
-                <div class="plotly-container" id="contenedor-plotly-heatmap">
-                    {{ grafico_heatmap | safe }}
-                </div>
+            <div id="contenedor-plotly-histograma" class="p-3 plotly-container">
+                {{ grafico_histograma | safe }}
             </div>
-        </div>
+
+            <div id="explicacion-histograma" class="px-4 pb-4"></div>
+        </article>
+
+        <!-- Gráfico 2: Barras por Categoría -->
+        <article class="surface-card flex flex-col justify-between animate-enter delay-3">
+            <div class="px-5 py-3.5 border-b border-hairline flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5">
+                    <h4 class="text-sm font-semibold text-primary">
+                        Barras por Categoría
+                    </h4>
+                    <span class="tooltip-wrapper">
+                        <button type="button" class="tooltip-trigger" aria-label="Qué muestra el gráfico de barras">
+                            {{ lucide_icon("help-circle", "w-3.5 h-3.5") }}
+                        </button>
+                        <span class="tooltip-popover" role="tooltip">
+                            Compara el promedio de {{ config_limpieza.col_numerica }} en cada grupo de {{ config_limpieza.col_categoria }} ordenado de mayor a menor frente al promedio general.
+                        </span>
+                    </span>
+                </div>
+
+                <button
+                    type="button"
+                    hx-post="/analizar/explicar-grafico"
+                    hx-vals='{"session_id": "{{ session_id }}", "tipo_grafico": "barras", "col_numerica": "{{ config_limpieza.col_numerica }}", "col_categoria": "{{ config_limpieza.col_categoria }}"}'
+                    hx-target="#explicacion-barras"
+                    hx-indicator="#spin-barras"
+                    class="btn-secondary px-2.5 py-1 text-xs"
+                >
+                    <span class="hide-on-request inline-flex items-center gap-1.5">
+                        {{ lucide_icon("sparkles", "w-3.5 h-3.5 text-accent") }}
+                        <span>Analizar con IA</span>
+                    </span>
+                    <span id="spin-barras" class="htmx-indicator items-center gap-1.5 text-accent">
+                        <span class="icon-spin inline-flex">{{ lucide_icon("refresh-cw", "w-3.5 h-3.5") }}</span>
+                        <span>Analizando...</span>
+                    </span>
+                </button>
+            </div>
+
+            <div id="contenedor-plotly-barras" class="p-3 plotly-container">
+                {{ grafico_barras | safe }}
+            </div>
+
+            <div id="explicacion-barras" class="px-4 pb-4"></div>
+        </article>
+
+        <!-- Gráfico 3: Mapa de Calor -->
+        <article class="surface-card lg:col-span-2 flex flex-col justify-between animate-enter delay-4">
+            <div class="px-5 py-3.5 border-b border-hairline flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5">
+                    <h4 class="text-sm font-semibold text-primary">
+                        Mapa de Calor
+                    </h4>
+                    <span class="tooltip-wrapper">
+                        <button type="button" class="tooltip-trigger" aria-label="Qué muestra el mapa de calor">
+                            {{ lucide_icon("help-circle", "w-3.5 h-3.5") }}
+                        </button>
+                        <span class="tooltip-popover" role="tooltip">
+                            Representa la correlación de Pearson entre variables numéricas: valores cercanos a 1 o -1 indican relación lineal fuerte.
+                        </span>
+                    </span>
+                </div>
+
+                <button
+                    type="button"
+                    hx-post="/analizar/explicar-grafico"
+                    hx-vals='{"session_id": "{{ session_id }}", "tipo_grafico": "correlacion", "col_numerica": "{{ config_limpieza.col_numerica }}", "col_categoria": "{{ config_limpieza.col_categoria }}"}'
+                    hx-target="#explicacion-correlacion"
+                    hx-indicator="#spin-correlacion"
+                    class="btn-secondary px-2.5 py-1 text-xs"
+                >
+                    <span class="hide-on-request inline-flex items-center gap-1.5">
+                        {{ lucide_icon("sparkles", "w-3.5 h-3.5 text-accent") }}
+                        <span>Analizar con IA</span>
+                    </span>
+                    <span id="spin-correlacion" class="htmx-indicator items-center gap-1.5 text-accent">
+                        <span class="icon-spin inline-flex">{{ lucide_icon("refresh-cw", "w-3.5 h-3.5") }}</span>
+                        <span>Analizando...</span>
+                    </span>
+                </button>
+            </div>
+
+            <div id="contenedor-plotly-heatmap" class="p-3 plotly-container">
+                {{ grafico_heatmap | safe }}
+            </div>
+
+            <div id="explicacion-correlacion" class="px-4 pb-4"></div>
+        </article>
     </section>
 </div>

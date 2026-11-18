@@ -24,7 +24,7 @@ def _remover_duplicados(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     """Retorna un nuevo DataFrame sin filas duplicadas y su registro."""
     cantidad_duplicados = int(df.duplicated().sum())
     if cantidad_duplicados == 0:
-        return df.copy(deep=True), "No se detectaron filas duplicadas."
+        return df.copy(deep=True), "Sin registros duplicados."
 
     df_sin_duplicados = df.drop_duplicates().reset_index(drop=True)
     return (
@@ -79,20 +79,18 @@ def _tratar_nulos(
     logs: list[str] = []
 
     if estrategia == "ninguna":
-        logs.append(
-            "Tratamiento de nulos omitido (estrategia='ninguna')."
-        )
+        logs.append("Valores faltantes conservados sin cambios.")
         return df_nuevo, logs
 
     if estrategia == "eliminar":
         filas_con_nulos = int(df_nuevo.isna().any(axis=1).sum())
         if filas_con_nulos == 0:
-            logs.append("Estrategia 'eliminar': no se hallaron filas con nulos.")
+            logs.append("Sin filas con valores faltantes.")
             return df_nuevo, logs
 
         df_filtrado = df_nuevo.dropna().reset_index(drop=True)
         logs.append(
-            f"Estrategia 'eliminar': {filas_con_nulos} fila(s) con nulos eliminada(s)."
+            f"Eliminadas {filas_con_nulos} fila(s) con datos faltantes."
         )
         return df_filtrado, logs
 
@@ -101,9 +99,7 @@ def _tratar_nulos(
     ]
 
     if not columnas_con_nulos:
-        logs.append(
-            f"Imputación '{estrategia}': el dataset no presenta valores nulos."
-        )
+        logs.append("Sin valores faltantes por completar.")
         return df_nuevo, logs
 
     for col in columnas_con_nulos:
@@ -125,8 +121,8 @@ def _tratar_nulos(
                 df_nuevo[col] = serie.fillna(valor_imputado)
 
             logs.append(
-                f"Columna numérica '{col}': {n_nulos} nulo(s) imputado(s) "
-                f"con {estrategia} ({round(valor_imputado, 4)})."
+                f"'{col}': {n_nulos} dato(s) faltante(s) completado(s) con "
+                f"{estrategia} ({round(valor_imputado, 4)})."
             )
         elif pd.api.types.is_datetime64_any_dtype(serie):
             modas_fecha = serie.dropna().mode()
@@ -134,12 +130,12 @@ def _tratar_nulos(
                 fecha_imp = modas_fecha.iloc[0]
                 df_nuevo[col] = serie.fillna(fecha_imp)
                 logs.append(
-                    f"Columna fecha '{col}': {n_nulos} nulo(s) imputado(s) "
-                    f"con moda ({fecha_imp})."
+                    f"'{col}': {n_nulos} fecha(s) faltante(s) completada(s) "
+                    f"con {fecha_imp}."
                 )
             else:
                 logs.append(
-                    f"Columna fecha '{col}': sin fechas válidas para imputar."
+                    f"'{col}': sin fechas válidas para completar."
                 )
         else:
             valor_cat = _calcular_valor_imputacion_categorica(serie)
@@ -148,8 +144,8 @@ def _tratar_nulos(
                     serie = serie.cat.add_categories([valor_cat])
             df_nuevo[col] = serie.fillna(valor_cat)
             logs.append(
-                f"Columna categórica '{col}': {n_nulos} nulo(s) imputado(s) "
-                f"con '{valor_cat}'."
+                f"'{col}': {n_nulos} dato(s) faltante(s) completado(s) con "
+                f"'{valor_cat}'."
             )
 
     return df_nuevo, logs
@@ -186,18 +182,16 @@ def _recortar_outliers_iqr(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
             if cantidad_outliers > 0:
                 df_nuevo[col] = np.clip(serie_float, lim_inf, lim_sup)
                 logs.append(
-                    f"Columna '{col}': {cantidad_outliers} atípico(s) acotado(s) "
-                    f"al rango IQR [{round(lim_inf, 4)}, {round(lim_sup, 4)}]."
+                    f"'{col}': {cantidad_outliers} valor(es) extremo(s) ajustado(s) "
+                    f"al rango [{round(lim_inf, 2)}, {round(lim_sup, 2)}]."
                 )
         except (ValueError, TypeError, IndexError) as exc:
             logs.append(
-                f"Advertencia al recortar outliers en '{col}': {exc}."
+                f"No fue posible ajustar extremos en '{col}': {exc}."
             )
 
     if not logs:
-        logs.append(
-            "Recorte de outliers IQR: no se hallaron valores fuera de límites."
-        )
+        logs.append("Sin valores extremos fuera de rango.")
 
     return df_nuevo, logs
 
@@ -242,7 +236,7 @@ def limpiar_dataset(
         df_actual, log_dup = _remover_duplicados(df_actual)
         logs.append(log_dup)
     else:
-        logs.append("Conservación de duplicados solicitada por el usuario.")
+        logs.append("Duplicados conservados.")
 
     df_actual, logs_nulos = _tratar_nulos(df_actual, estrategia)
     logs.extend(logs_nulos)

@@ -43,19 +43,17 @@ def _limitar_lineas(texto: str, max_lineas: int = 3) -> str:
 def _generar_respaldo_determinista(
     auditoria: dict[str, Any],
 ) -> dict[str, str]:
-    """Construye un título y resumen técnico local sin conexión externa."""
-    filas = int(auditoria.get("filas", 0))
-    columnas = int(auditoria.get("columnas", 0))
-    duplicados = int(auditoria.get("duplicados", 0))
+    """Construye un título y resumen ejecutivo sobrio de 2 líneas sin red."""
     esquema = auditoria.get("esquema", [])
-
+    duplicados = int(auditoria.get("duplicados", 0))
     total_nulos = sum(int(col.get("nulos", 0)) for col in esquema)
+
     cols_numericas = [
         str(col.get("columna", ""))
         for col in esquema
         if col.get("tipo_logico") == "numerica"
     ]
-    cols_categoricas = [
+    cols_dimension = [
         str(col.get("columna", ""))
         for col in esquema
         if col.get("tipo_logico") in {"categorica", "fecha"}
@@ -68,28 +66,41 @@ def _generar_respaldo_determinista(
         if isinstance(info, dict)
     )
 
-    muestra_num = ", ".join(cols_numericas[:3]) if cols_numericas else "sin métricas"
-    muestra_cat = (
-        ", ".join(cols_categoricas[:3]) if cols_categoricas else "sin dimensiones"
+    muestra_num = ", ".join(cols_numericas[:3]) if cols_numericas else "sin métricas numéricas"
+    muestra_dim = ", ".join(cols_dimension[:3]) if cols_dimension else "sin dimensiones categóricas"
+
+    titulo_reporte = "Diagnóstico Estructural y Variables del Conjunto de Datos"
+
+    linea_1 = (
+        f"El archivo integra dimensiones descriptivas ({muestra_dim}) junto con "
+        f"variables cuantitativas ({muestra_num}) orientadas al análisis comparativo."
     )
 
-    titulo_reporte = (
-        f"Reporte Técnico de Auditoría y Análisis ({filas} registros, "
-        f"{columnas} variables)"
-    )
-    resumen_ejecutivo = (
-        f"El conjunto de datos analizado comprende {filas} filas y {columnas} "
-        f"columnas (métricas: {muestra_num}; dimensiones: {muestra_cat}).\n"
-        f"La inspección estructural identificó {total_nulos} valor(es) nulo(s), "
-        f"{duplicados} registro(s) duplicado(s) y {total_outliers} valor(es) "
-        f"atípico(s) bajo el criterio IQR.\n"
-        "Tras aplicar el flujo funcional de depuración, los indicadores descriptivos "
-        "y visualizaciones quedan habilitados para la toma de decisiones."
-    )
+    hallazgos: list[str] = []
+    if total_nulos > 0:
+        hallazgos.append("valores faltantes")
+    if duplicados > 0:
+        hallazgos.append("registros repetidos")
+    if total_outliers > 0:
+        hallazgos.append("valores atípicos marcados")
+
+    if hallazgos:
+        detalle_calidad = ", ".join(hallazgos[:-1]) + (
+            f" y {hallazgos[-1]}" if len(hallazgos) > 1 else hallazgos[0]
+        )
+        linea_2 = (
+            f"Se observan {detalle_calidad} que conviene depurar antes de "
+            "consolidar estadísticas y visualizaciones."
+        )
+    else:
+        linea_2 = (
+            "La estructura presenta consistencia completa para generar "
+            "estadísticas descriptivas y visualizaciones comparativas."
+        )
 
     return {
         "titulo_reporte": titulo_reporte,
-        "resumen_ejecutivo": resumen_ejecutivo,
+        "resumen_ejecutivo": f"{linea_1}\n{linea_2}",
     }
 
 
@@ -187,5 +198,200 @@ def generar_contexto_ejecutivo(
             exc,
         )
         return _generar_respaldo_determinista(auditoria)
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
+def _limpiar_texto_plano(texto: str, max_lineas: int = 3) -> str:
+    """Elimina marcas Markdown básicas y limita el texto a un máximo de líneas."""
+    sin_md = texto.replace("**", "").replace("__", "").replace("`", "")
+    lineas = [
+        linea.lstrip("#-*• ").strip()
+        for linea in sin_md.strip().splitlines()
+        if linea.strip()
+    ]
+    if not lineas:
+        return ""
+    return " ".join(lineas[:max_lineas])
+
+
+def _generar_explicacion_grafico_local(
+    tipo_grafico: str, datos_grafico: dict[str, Any]
+) -> str:
+    """Genera una interpretación estadística determinista cuando no hay API externa."""
+    tipo = tipo_grafico.strip().lower()
+
+    if tipo == "histograma":
+        col = str(datos_grafico.get("columna", "la métrica"))
+        media = float(datos_grafico.get("media", 0.0))
+        mediana = float(datos_grafico.get("mediana", 0.0))
+        moda = datos_grafico.get("moda")
+        q25 = float(datos_grafico.get("q25", 0.0))
+        q75 = float(datos_grafico.get("q75", 0.0))
+        outliers = int(datos_grafico.get("outliers", 0))
+
+        diferencia_rel = abs(media - mediana) / max(abs(mediana), 1e-6)
+        if diferencia_rel < 0.03:
+            sesgo_txt = (
+                f"La distribución de {col} es prácticamente simétrica "
+                f"(media {media:.2f} cercana a la mediana {mediana:.2f})."
+            )
+        elif media > mediana:
+            sesgo_txt = (
+                f"La distribución de {col} presenta sesgo positivo: la media "
+                f"({media:.2f}) supera a la mediana ({mediana:.2f}) por efecto de valores altos."
+            )
+        else:
+            sesgo_txt = (
+                f"La distribución de {col} muestra sesgo negativo: la media "
+                f"({media:.2f}) queda por debajo de la mediana ({mediana:.2f})."
+            )
+
+        moda_txt = (
+            f" El valor más frecuente se ubica en {float(moda):.2f} y el"
+            if moda is not None
+            else " El"
+        )
+        rango_txt = (
+            f"{moda_txt} 50% central de los registros se concentra entre "
+            f"{q25:.2f} y {q75:.2f}"
+        )
+        extra_outliers = (
+            f", con {outliers} valor(es) fuera del rango típico."
+            if outliers > 0
+            else "."
+        )
+        return f"{sesgo_txt}{rango_txt}{extra_outliers}"
+
+    if tipo in {"barras", "barras_categoria", "boxplot"}:
+        col_met = str(datos_grafico.get("col_metrica", "la métrica"))
+        col_cat = str(datos_grafico.get("col_categoria", "la categoría"))
+        ranking = datos_grafico.get("ranking_categorias", [])
+        promedio_global = datos_grafico.get("promedio_general")
+
+        if not ranking:
+            return (
+                f"No hay suficientes registros válidos para comparar {col_met} "
+                f"entre las categorías de {col_cat}."
+            )
+
+        lider = ranking[0]
+        menor = ranking[-1]
+        nombre_lider = str(lider.get("categoria", ""))
+        val_lider = float(lider.get("promedio", 0.0))
+        nombre_menor = str(menor.get("categoria", ""))
+        val_menor = float(menor.get("promedio", 0.0))
+
+        brecha = val_lider - val_menor
+        linea_1 = (
+            f"En {col_met} por {col_cat}, '{nombre_lider}' lidera con un "
+            f"promedio de {val_lider:.2f}, superando en {brecha:.2f} unidades a "
+            f"'{nombre_menor}' ({val_menor:.2f})."
+        )
+        if promedio_global is not None:
+            linea_2 = (
+                f" La referencia general del conjunto se sitúa en "
+                f"{float(promedio_global):.2f}, permitiendo distinguir grupos "
+                f"por encima y por debajo de la media."
+            )
+        else:
+            linea_2 = ""
+        return f"{linea_1}{linea_2}"
+
+    correlaciones = datos_grafico.get("correlaciones", [])
+    if not correlaciones:
+        return (
+            "El conjunto actual requiere al menos dos variables numéricas con "
+            "variación para identificar asociaciones lineales relevantes."
+        )
+
+    mayor = correlaciones[0]
+    var_a = str(mayor.get("var_a", ""))
+    var_b = str(mayor.get("var_b", ""))
+    coef = float(mayor.get("coeficiente", 0.0))
+    intensidad = (
+        "fuerte"
+        if abs(coef) >= 0.7
+        else ("moderada" if abs(coef) >= 0.4 else "débil")
+    )
+    sentido = "positiva" if coef >= 0 else "negativa"
+    return (
+        f"La relación lineal más destacada ocurre entre {var_a} y {var_b}, "
+        f"con una correlación {intensidad} {sentido} (r = {coef:.2f}). "
+        "Los valores cercanos a cero indican variables que evolucionan de forma independiente."
+    )
+
+
+def _invocar_gemini_grafico(
+    api_key: str,
+    titulo_reporte: str,
+    tipo_grafico: str,
+    datos_grafico: dict[str, Any],
+) -> str:
+    """Consulta Gemini para redactar una interpretación breve de una gráfica."""
+    payload = {
+        "contexto_dataset": titulo_reporte,
+        "tipo_grafico": tipo_grafico,
+        "metricas_grafica": datos_grafico,
+    }
+    prompt = (
+        "Actúa como Analista de Datos Senior. Redacta una interpretación clara "
+        "y elocuente en español latinoamericano basada únicamente en las métricas "
+        "exactas de esta gráfica. Responde en texto plano sin Markdown, sin listas "
+        "y en máximo 3 líneas.\n\n"
+        f"Datos:\n{json.dumps(payload, ensure_ascii=False, default=str)}"
+    )
+
+    cliente = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(
+            timeout=TIMEOUT_MILISEGUNDOS,
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
+    )
+    respuesta = cliente.models.generate_content(
+        model=MODELO_GEMINI,
+        contents=prompt,
+        config=types.GenerateContentConfig(temperature=0.2),
+    )
+    texto = _limpiar_texto_plano(getattr(respuesta, "text", None) or "", max_lineas=3)
+    if not texto:
+        raise ValueError("La respuesta de interpretación llegó vacía.")
+    return texto
+
+
+def explicar_grafico_ia(
+    contexto_dataset: dict[str, Any],
+    tipo_grafico: str,
+    datos_grafico: dict[str, Any],
+) -> str:
+    """Genera una interpretación breve en español sobre una gráfica estadística.
+
+    Usa ``gemini-2.5-flash`` con timeout estricto de 4 segundos cuando existe
+    ``GEMINI_API_KEY`` válida; ante cualquier fallo o modo offline retorna una
+    explicación determinista basada en las métricas recibidas.
+    """
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key or api_key == "tu_api_key_aqui":
+        return _generar_explicacion_grafico_local(tipo_grafico, datos_grafico)
+
+    titulo_reporte = str(
+        contexto_dataset.get("titulo_reporte", "Análisis de Dataset")
+    )
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        futuro = executor.submit(
+            _invocar_gemini_grafico,
+            api_key,
+            titulo_reporte,
+            tipo_grafico,
+            datos_grafico,
+        )
+        return futuro.result(timeout=TIMEOUT_SEGUNDOS)
+    except Exception as exc:
+        logger.warning(
+            "Respaldo local al explicar gráfico (%s): %s", tipo_grafico, exc
+        )
+        return _generar_explicacion_grafico_local(tipo_grafico, datos_grafico)
     finally:
         executor.shutdown(wait=False, cancel_futures=True)

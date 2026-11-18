@@ -256,3 +256,105 @@ def matriz_correlacion(df: pd.DataFrame) -> dict[str, Any]:
     except (ValueError, TypeError, ZeroDivisionError) as exc:
         logger.warning("Error al calcular matriz de correlación: %s", exc)
         return {"columnas": cols_num, "matriz": {}}
+
+
+def extraer_metricas_grafico(
+    df: pd.DataFrame,
+    tipo_grafico: str,
+    col_metrica: str | None = None,
+    col_categoria: str | None = None,
+) -> dict[str, Any]:
+    """Extrae métricas exactas de una visualización para explicabilidad IA.
+
+    Mantiene la separación de capas evitando cálculos Pandas/NumPy en ``web/``.
+    """
+    if not isinstance(df, pd.DataFrame):
+        raise ValueError("El parámetro 'df' debe ser un pandas.DataFrame.")
+
+    tipo = tipo_grafico.strip().lower()
+    if tipo == "histograma":
+        if not col_metrica or col_metrica not in df.columns:
+            raise KeyError(
+                f"La columna numérica '{col_metrica}' no existe en el dataset."
+            )
+        serie = df[col_metrica].dropna().astype(float)
+        if serie.empty:
+            raise ValueError(
+                f"La columna '{col_metrica}' no tiene valores válidos."
+            )
+        valores = serie.to_numpy(dtype=float)
+        q25 = float(np.percentile(valores, 25))
+        q75 = float(np.percentile(valores, 75))
+        iqr = q75 - q25
+        outliers = int(
+            np.sum((valores < q25 - 1.5 * iqr) | (valores > q75 + 1.5 * iqr))
+        )
+        modas = serie.mode(dropna=True)
+        moda = round(float(modas.iloc[0]), 4) if not modas.empty else None
+        return {
+            "columna": col_metrica,
+            "conteo": int(valores.size),
+            "media": round(float(np.mean(valores)), 4),
+            "mediana": round(float(np.median(valores)), 4),
+            "moda": moda,
+            "q25": round(q25, 4),
+            "q75": round(q75, 4),
+            "outliers": outliers,
+        }
+
+    if tipo in {"barras", "barras_categoria", "boxplot"}:
+        if not col_metrica or col_metrica not in df.columns:
+            raise KeyError(
+                f"La columna numérica '{col_metrica}' no existe en el dataset."
+            )
+        if not col_categoria or col_categoria not in df.columns:
+            raise KeyError(
+                f"La columna categórica '{col_categoria}' no existe en el dataset."
+            )
+        df_val = df[[col_metrica, col_categoria]].dropna()
+        if df_val.empty:
+            raise ValueError("No hay registros válidos para agrupar.")
+        promedio_general = round(float(df_val[col_metrica].astype(float).mean()), 4)
+        agrupado = (
+            df_val.groupby(col_categoria, observed=True)[col_metrica]
+            .agg(["mean", "count"])
+            .sort_values(by="mean", ascending=False)
+            .head(12)
+        )
+        ranking = [
+            {
+                "categoria": str(cat),
+                "promedio": round(float(fila["mean"]), 4),
+                "registros": int(fila["count"]),
+            }
+            for cat, fila in agrupado.iterrows()
+        ]
+        return {
+            "col_metrica": col_metrica,
+            "col_categoria": col_categoria,
+            "promedio_general": promedio_general,
+            "ranking_categorias": ranking,
+        }
+
+    if tipo in {"heatmap", "correlacion"}:
+        corr = matriz_correlacion(df)
+        cols = corr["columnas"]
+        matriz = corr["matriz"]
+        pares: list[dict[str, Any]] = []
+        for idx_a, var_a in enumerate(cols):
+            for var_b in cols[idx_a + 1 :]:
+                coef = float(matriz.get(var_a, {}).get(var_b, 0.0))
+                pares.append(
+                    {
+                        "var_a": var_a,
+                        "var_b": var_b,
+                        "coeficiente": round(coef, 3),
+                    }
+                )
+        pares.sort(key=lambda item: abs(item["coeficiente"]), reverse=True)
+        return {
+            "columnas": cols,
+            "correlaciones": pares[:6],
+        }
+
+    raise ValueError(f"Tipo de gráfico no soportado para explicación: '{tipo_grafico}'.")

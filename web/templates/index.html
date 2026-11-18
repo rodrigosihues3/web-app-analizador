@@ -1,77 +1,33 @@
 {% extends "base.html" %}
+{% from "macros/icons.html" import lucide_icon %}
 
 {% block content %}
-<div class="pila">
-    <section class="tarjeta" aria-labelledby="titulo-cargar">
-        <div class="tarjeta-cuerpo">
-            <h2 id="titulo-cargar" class="titulo-seccion" >Cargar datos</h2>
+<div id="workspace" class="space-y-6">
+    <!-- Estado inicial minimalista para carga manual -->
+    <section class="surface-card p-10 sm:p-14 text-center max-w-2xl mx-auto mt-6">
+        <div class="inline-flex items-center justify-center w-11 h-11 rounded-full surface-subtle text-accent mb-4">
+            {{ lucide_icon("file-spreadsheet", "w-5 h-5") }}
+        </div>
+        <h1 class="text-xl sm:text-2xl font-semibold text-primary heading-tight">
+            Audita y explora tus datos en segundos
+        </h1>
+        <p class="text-sm text-secondary mt-2 max-w-md mx-auto">
+            Detecta valores faltantes, duplicados y registros extremos, ejecuta limpieza reproducible y genera reportes listos para compartir.
+        </p>
 
-            <div class="rejilla-2">
-                <form
-                    hx-post="/analizar/cargar"
-                    hx-target="#workspace"
-                    hx-encoding="multipart/form-data"
-                    hx-indicator="#indicador-carga-inicial"
-                    class="formulario-carga"
-                   
-                >
-                    <div>
-                        <label for="input-archivo" class="campo-etiqueta">Subir un archivo</label>
-                        <p class="campo-ayuda">Formatos CSV o Excel.</p>
-                        <input
-                            id="input-archivo"
-                            name="archivo"
-                            type="file"
-                            accept=".csv,.xlsx"
-                            class="control"
-                        >
-                    </div>
-                    <div>
-                        <button type="submit" class="btn btn-primario btn-carga btn-bloque-movil">
-                            Analizar archivo
-                        </button>
-                    </div>
-                </form>
-
-                <form
-                    hx-post="/analizar/cargar"
-                    hx-target="#workspace"
-                    hx-indicator="#indicador-carga-inicial"
-                    class="formulario-carga"
-                   
-                >
-                    <div>
-                        <label for="select-dataset-demo" class="campo-etiqueta">Usar un ejemplo</label>
-                        <p class="campo-ayuda">Prueba con datos de muestra.</p>
-                        <select
-                            id="select-dataset-demo"
-                            name="dataset_demo"
-                            class="control"
-                        >
-                            {% for demo in datasets_demo %}
-                            <option value="{{ demo.archivo }}">{{ demo.etiqueta }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <button type="submit" class="btn btn-carga btn-bloque-movil">
-                            Analizar ejemplo
-                        </button>
-                    </div>
-                </form>
-            </div>
-
-            <div id="indicador-carga-inicial" class="htmx-indicator indicador" role="status" aria-live="polite">
-                <span class="spinner" aria-hidden="true"></span>
-                <span>Analizando…</span>
-            </div>
+        <div class="mt-6 flex flex-col items-center gap-3">
+            <button
+                type="button"
+                onclick="window.openUploadModal()"
+                class="btn-primary px-5 py-2.5 text-sm"
+            >
+                {{ lucide_icon("upload", "w-4 h-4") }}
+                <span>Subir archivo CSV o Excel</span>
+            </button>
+            <span class="text-xs text-muted">
+                También puedes arrastrar el archivo directamente sobre esta ventana
+            </span>
         </div>
     </section>
-
-    <div id="workspace" class="pila">
-        <div class="tarjeta-vacia">
-            <p>Sube un archivo o elige un ejemplo para comenzar.</p>
-        </div>
-    </div>
 </div>
 {% endblock %}

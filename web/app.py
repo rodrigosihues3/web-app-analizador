@@ -14,12 +14,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from core.auditor import DatasetAuditor
-from core.estadistica import analizar_valores_clave, resumen_descriptivo
+from core.estadistica import (
+    analizar_valores_clave,
+    extraer_metricas_grafico,
+    resumen_descriptivo,
+)
 from core.exportador import exportar_dataframe, generar_reporte_pdf
-from core.sintetizador import generar_contexto_ejecutivo
+from core.sintetizador import explicar_grafico_ia, generar_contexto_ejecutivo
 from core.transformador import limpiar_dataset
 from core.visualizador import (
-    generar_boxplot_plotly,
+    generar_barras_categoria_plotly,
     generar_graficos_estaticos_pdf,
     generar_heatmap_plotly,
     generar_histograma_plotly,
@@ -36,29 +40,20 @@ TEMP_UPLOADS_DIR: Path = BASE_DIR / "temp_uploads"
 
 TEMP_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
-DATASETS_DEMO: dict[str, dict[str, str]] = {
-    "notas_estudiantes.csv": {
-        "archivo": "notas_estudiantes.csv",
-        "etiqueta": "notas_estudiantes.csv — Registro Académico (25 filas, nulos, duplicados y outlier IQR)",
-        "dominio": "Académico / Educación Superior",
-    },
-    "retail_sales.csv": {
-        "archivo": "retail_sales.csv",
-        "etiqueta": "retail_sales.csv — Ventas Corporativas (30 filas, series de fecha, nulos y outlier extremo)",
-        "dominio": "Comercial / Retail B2B",
-    },
-}
+DATASETS_DEMO_VALIDOS: frozenset[str] = frozenset(
+    {"notas_estudiantes.csv", "retail_sales.csv"}
+)
 
 # Almacén en memoria del estado por sesión activa
 SESIONES: dict[str, dict[str, Any]] = {}
 
 app = FastAPI(
-    title="Analizador Multiparadigma de Datos",
+    title="Analizador de Datos",
     description=(
-        "Plataforma analítica B2B Offline-First con arquitectura híbrida "
+        "Plataforma analítica Offline-First con arquitectura híbrida "
         "POO + Programación Funcional."
     ),
-    version="2.0.0",
+    version="2.1.0",
 )
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -77,14 +72,7 @@ def _interpretar_booleano(valor: str | bool | None) -> bool:
 def _seleccionar_columnas_por_tipo(
     esquema: list[dict[str, Any]],
 ) -> tuple[list[str], list[str], str, str]:
-    """Clasifica columnas categóricas y numéricas sugiriendo valores por defecto.
-
-    Args:
-        esquema: Lista de diccionarios generada por ``auditar_estructura()``.
-
-    Returns:
-        Tupla ``(cols_categoricas, cols_numericas, cat_default, num_default)``.
-    """
+    """Clasifica columnas categóricas y numéricas sugiriendo valores iniciales."""
     cols_numericas = [
         str(col["columna"])
         for col in esquema
@@ -99,7 +87,6 @@ def _seleccionar_columnas_por_tipo(
     if not cols_categoricas:
         cols_categoricas = [str(col["columna"]) for col in esquema]
 
-    # Priorizar como categoría sugerida aquella con cardinalidad moderada (2 a 12)
     candidatas_agrupacion = [
         str(col["columna"])
         for col in esquema
@@ -112,7 +99,6 @@ def _seleccionar_columnas_por_tipo(
         else (cols_categoricas[0] if cols_categoricas else "")
     )
 
-    # Priorizar métricas principales conocidas o la primera numérica disponible
     metricas_preferidas = {"Nota", "Total_Venta"}
     num_preferidas = [c for c in cols_numericas if c in metricas_preferidas]
     num_default = (
@@ -130,7 +116,7 @@ def _renderizar_alerta_error(
     detalle: str,
     codigo_estado: int = 200,
 ) -> HTMLResponse:
-    """Renderiza el fragmento HTML controlado de alerta técnica sin trazas crudas."""
+    """Renderiza el fragmento HTML controlado de alerta sin trazas crudas."""
     return templates.TemplateResponse(
         request=request,
         name="partials/alerta_error.html",
@@ -147,20 +133,7 @@ async def _materializar_archivo_sesion(
     archivo: UploadFile | None,
     dataset_demo: str | None,
 ) -> tuple[Path, str]:
-    """Almacena el archivo subido o copia el dataset demo hacia ``temp_uploads/``.
-
-    Args:
-        session_id: Identificador UUID4 asignado a la sesión.
-        archivo: Archivo recibido por ``multipart/form-data``.
-        dataset_demo: Nombre del dataset de demostración seleccionado.
-
-    Returns:
-        Tupla ``(ruta_guardada, nombre_original)``.
-
-    Raises:
-        ValueError: Si no se suministró fuente válida o el archivo está vacío.
-        FileNotFoundError: Si el dataset de demostración no existe en disco.
-    """
+    """Almacena el archivo subido hacia ``temp_uploads/`` validando contenido."""
     TEMP_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
     if archivo is not None and archivo.filename and archivo.filename.strip():
@@ -168,7 +141,7 @@ async def _materializar_archivo_sesion(
         contenido = await archivo.read()
         if not contenido:
             raise ValueError(
-                f"El archivo cargado '{nombre_original}' está completamente vacío."
+                f"El archivo '{nombre_original}' está vacío. Selecciona un archivo con registros."
             )
         ruta_destino = TEMP_UPLOADS_DIR / f"{session_id}_{nombre_original}"
         ruta_destino.write_bytes(contenido)
@@ -176,34 +149,31 @@ async def _materializar_archivo_sesion(
 
     if dataset_demo is not None and dataset_demo.strip():
         nombre_demo = Path(dataset_demo.strip()).name
-        if nombre_demo not in DATASETS_DEMO:
+        if nombre_demo not in DATASETS_DEMO_VALIDOS:
             raise ValueError(
-                f"El dataset de prueba '{nombre_demo}' no está registrado."
+                f"El archivo de referencia '{nombre_demo}' no está disponible."
             )
         ruta_origen = DATASETS_DIR / nombre_demo
         if not ruta_origen.exists():
             raise FileNotFoundError(
-                f"No se encontró el dataset de demostración '{nombre_demo}'."
+                f"No se encontró el archivo '{nombre_demo}' en el servidor."
             )
         ruta_destino = TEMP_UPLOADS_DIR / f"{session_id}_{nombre_demo}"
         shutil.copyfile(ruta_origen, ruta_destino)
         return ruta_destino, nombre_demo
 
     raise ValueError(
-        "Debe adjuntar un archivo tabular (.csv o .xlsx) o seleccionar un "
-        "dataset de demostración."
+        "Adjunta un archivo tabular en formato .csv o .xlsx para iniciar el análisis."
     )
 
 
 @app.get("/", response_class=HTMLResponse)
 async def pagina_inicio(request: Request) -> HTMLResponse:
-    """Renderiza la interfaz principal de ingesta y consola analítica."""
+    """Renderiza la vista principal limpia lista para carga manual."""
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={
-            "datasets_demo": list(DATASETS_DEMO.values()),
-        },
+        context={},
     )
 
 
@@ -213,7 +183,7 @@ async def cargar_y_auditar_dataset(
     archivo: UploadFile | None = File(default=None),
     dataset_demo: str | None = Form(default=None),
 ) -> HTMLResponse:
-    """Ingesta un archivo o dataset demo, audita su estructura y genera síntesis IA."""
+    """Ingesta un archivo tabular, audita su estructura y genera síntesis inicial."""
     session_id = str(uuid.uuid4())
     ruta_guardada: Path | None = None
 
@@ -249,6 +219,7 @@ async def cargar_y_auditar_dataset(
             "nombre_archivo": nombre_original,
             "ruta_archivo": str(ruta_guardada),
             "df_raw": auditor.df_raw,
+            "muestra_filas": muestra_filas,
             "auditoria": auditoria,
             "contexto": contexto_ia,
             "columnas_categoricas": cols_categoricas,
@@ -301,8 +272,46 @@ async def cargar_y_auditar_dataset(
                 pass
         return _renderizar_alerta_error(
             request=request,
-            titulo="ERROR DE INGESTA Y AUDITORÍA ESTRUCTURAL",
+            titulo="No se pudo leer el archivo",
             detalle=str(exc),
+            codigo_estado=200,
+        )
+
+
+@app.post("/analizar/regenerar-resumen", response_class=HTMLResponse)
+async def regenerar_resumen_ejecutivo(
+    request: Request,
+    session_id: str = Form(default=""),
+) -> HTMLResponse:
+    """Regenera el título y resumen ejecutivo para la sesión activa."""
+    try:
+        id_limpio = session_id.strip()
+        if not id_limpio or id_limpio not in SESIONES:
+            raise KeyError(
+                "La sesión expiró o no es válida. Sube nuevamente el archivo."
+            )
+
+        sesion = SESIONES[id_limpio]
+        contexto_nuevo = generar_contexto_ejecutivo(
+            sesion["auditoria"], sesion["muestra_filas"]
+        )
+        sesion["contexto"] = contexto_nuevo
+
+        return templates.TemplateResponse(
+            request=request,
+            name="partials/resumen_ejecutivo.html",
+            context={
+                "contexto": contexto_nuevo,
+                "animar_escritura": True,
+            },
+        )
+    except (KeyError, ValueError, TimeoutError, OSError) as exc:
+        mensaje = exc.args[0] if exc.args else str(exc)
+        logger.warning("Error controlado en /analizar/regenerar-resumen: %s", mensaje)
+        return _renderizar_alerta_error(
+            request=request,
+            titulo="No se pudo regenerar el resumen",
+            detalle=str(mensaje),
             codigo_estado=200,
         )
 
@@ -318,13 +327,12 @@ async def procesar_pipeline_analitico(
     col_numerica: str | None = Form(default=None),
     col_metrica: str | None = Form(default=None),
 ) -> HTMLResponse:
-    """Ejecuta el pipeline funcional de limpieza, estadística y visualización Plotly."""
+    """Ejecuta limpieza funcional, estadística descriptiva y gráficos Plotly."""
     try:
         id_limpio = session_id.strip()
         if not id_limpio or id_limpio not in SESIONES:
             raise KeyError(
-                "La sesión de análisis no existe o ha expirado. "
-                "Cargue nuevamente el archivo para continuar."
+                "La sesión de análisis expiró. Sube nuevamente el archivo para continuar."
             )
 
         sesion = SESIONES[id_limpio]
@@ -348,13 +356,11 @@ async def procesar_pipeline_analitico(
 
         if not columna_num:
             raise ValueError(
-                "El dataset no dispone de columnas numéricas válidas para "
-                "ejecutar el análisis estadístico."
+                "El archivo no contiene columnas numéricas disponibles para analizar."
             )
         if not columna_cat:
             raise ValueError(
-                "Debe seleccionar una columna categórica válida para la "
-                "agrupación analítica."
+                "Selecciona una columna categórica para comparar los datos."
             )
 
         df_limpio, logs_limpieza = limpiar_dataset(
@@ -370,8 +376,8 @@ async def procesar_pipeline_analitico(
         )
 
         grafico_histograma = generar_histograma_plotly(df_limpio, columna_num)
-        grafico_boxplot = generar_boxplot_plotly(
-            df_limpio, columna_num, col_grupo=columna_cat
+        grafico_barras = generar_barras_categoria_plotly(
+            df_limpio, columna_num, columna_cat
         )
         grafico_heatmap = generar_heatmap_plotly(df_limpio)
 
@@ -401,7 +407,7 @@ async def procesar_pipeline_analitico(
                 "estadisticas": estadisticas,
                 "valores_clave": valores_clave,
                 "grafico_histograma": grafico_histograma,
-                "grafico_boxplot": grafico_boxplot,
+                "grafico_barras": grafico_barras,
                 "grafico_heatmap": grafico_heatmap,
             },
         )
@@ -417,14 +423,14 @@ async def procesar_pipeline_analitico(
         logger.warning("Error controlado en /analizar/procesar: %s", mensaje)
         return _renderizar_alerta_error(
             request=request,
-            titulo="ERROR EN PIPELINE DE LIMPIEZA Y ANÁLISIS",
+            titulo="No se pudo completar el análisis",
             detalle=str(mensaje),
             codigo_estado=200,
         )
 
 
 def _asegurar_estado_procesado(sesion: dict[str, Any]) -> None:
-    """Garantiza que la sesión cuente con DataFrame limpio y métricas antes de exportar."""
+    """Garantiza que la sesión cuente con DataFrame limpio antes de exportar o explicar."""
     if sesion.get("df_limpio") is not None:
         return
 
@@ -437,8 +443,12 @@ def _asegurar_estado_procesado(sesion: dict[str, Any]) -> None:
     )
     estadisticas = resumen_descriptivo(df_limpio)
 
-    col_cat = str(config.get("col_categoria") or sesion.get("col_categoria_default") or "")
-    col_num = str(config.get("col_numerica") or sesion.get("col_numerica_default") or "")
+    col_cat = str(
+        config.get("col_categoria") or sesion.get("col_categoria_default") or ""
+    )
+    col_num = str(
+        config.get("col_numerica") or sesion.get("col_numerica_default") or ""
+    )
     valores_clave: dict[str, Any] | None = None
     if col_cat and col_num:
         try:
@@ -452,6 +462,77 @@ def _asegurar_estado_procesado(sesion: dict[str, Any]) -> None:
     sesion["valores_clave"] = valores_clave
 
 
+@app.post("/analizar/explicar-grafico", response_class=HTMLResponse)
+async def explicar_grafico_endpoint(
+    request: Request,
+    session_id: str = Form(default=""),
+    tipo_grafico: str = Form(default="histograma"),
+    col_numerica: str | None = Form(default=None),
+    col_categoria: str | None = Form(default=None),
+) -> HTMLResponse:
+    """Genera una interpretación analítica breve para una visualización específica."""
+    try:
+        id_limpio = session_id.strip()
+        if not id_limpio or id_limpio not in SESIONES:
+            raise KeyError(
+                "La sesión de análisis expiró. Sube nuevamente el archivo."
+            )
+
+        sesion = SESIONES[id_limpio]
+        _asegurar_estado_procesado(sesion)
+
+        config = sesion.get("config_limpieza", {})
+        metrica = (
+            col_numerica
+            or config.get("col_numerica")
+            or sesion.get("col_numerica_default")
+            or ""
+        ).strip()
+        categoria = (
+            col_categoria
+            or config.get("col_categoria")
+            or sesion.get("col_categoria_default")
+            or ""
+        ).strip()
+
+        datos_grafico = extraer_metricas_grafico(
+            df=sesion["df_limpio"],
+            tipo_grafico=tipo_grafico,
+            col_metrica=metrica or None,
+            col_categoria=categoria or None,
+        )
+        interpretacion = explicar_grafico_ia(
+            contexto_dataset=sesion["contexto"],
+            tipo_grafico=tipo_grafico,
+            datos_grafico=datos_grafico,
+        )
+
+        return templates.TemplateResponse(
+            request=request,
+            name="partials/explicacion_grafico.html",
+            context={
+                "interpretacion": interpretacion,
+            },
+        )
+    except (
+        KeyError,
+        ValueError,
+        ZeroDivisionError,
+        TimeoutError,
+        OSError,
+    ) as exc:
+        mensaje = exc.args[0] if exc.args else str(exc)
+        logger.warning(
+            "Error controlado en /analizar/explicar-grafico: %s", mensaje
+        )
+        return _renderizar_alerta_error(
+            request=request,
+            titulo="No se pudo interpretar la gráfica",
+            detalle=str(mensaje),
+            codigo_estado=200,
+        )
+
+
 @app.get("/export/dataset/{session_id}")
 async def descargar_dataset_limpio(
     request: Request,
@@ -462,9 +543,7 @@ async def descargar_dataset_limpio(
     try:
         id_limpio = session_id.strip()
         if not id_limpio or id_limpio not in SESIONES:
-            raise KeyError(
-                f"La sesión '{id_limpio}' no existe o ha expirado."
-            )
+            raise KeyError("La sesión solicitada no existe o ha expirado.")
 
         sesion = SESIONES[id_limpio]
         _asegurar_estado_procesado(sesion)
@@ -490,17 +569,12 @@ async def descargar_dataset_limpio(
         return StreamingResponse(
             buffer, media_type=media_type, headers=headers
         )
-    except (
-        KeyError,
-        ValueError,
-        FileNotFoundError,
-        OSError,
-    ) as exc:
+    except (KeyError, ValueError, FileNotFoundError, OSError) as exc:
         mensaje = exc.args[0] if exc.args else str(exc)
         logger.warning("Error controlado en /export/dataset: %s", mensaje)
         return _renderizar_alerta_error(
             request=request,
-            titulo="ERROR DE EXPORTACIÓN DE DATASET",
+            titulo="No se pudo exportar el archivo",
             detalle=str(mensaje),
             codigo_estado=400,
         )
@@ -515,9 +589,7 @@ async def descargar_reporte_pdf(
     try:
         id_limpio = session_id.strip()
         if not id_limpio or id_limpio not in SESIONES:
-            raise KeyError(
-                f"La sesión '{id_limpio}' no existe o ha expirado."
-            )
+            raise KeyError("La sesión solicitada no existe o ha expirado.")
 
         sesion = SESIONES[id_limpio]
         _asegurar_estado_procesado(sesion)
@@ -534,7 +606,7 @@ async def descargar_reporte_pdf(
         )
 
         base_nombre = Path(sesion["nombre_archivo"]).stem
-        nombre_pdf = f"reporte_tecnico_{base_nombre}.pdf"
+        nombre_pdf = f"reporte_{base_nombre}.pdf"
         headers = {
             "Content-Disposition": f'attachment; filename="{nombre_pdf}"'
         }
@@ -554,7 +626,7 @@ async def descargar_reporte_pdf(
         logger.warning("Error controlado en /export/pdf: %s", mensaje)
         return _renderizar_alerta_error(
             request=request,
-            titulo="ERROR AL GENERAR REPORTE PDF",
+            titulo="No se pudo generar el reporte PDF",
             detalle=str(mensaje),
             codigo_estado=400,
         )
