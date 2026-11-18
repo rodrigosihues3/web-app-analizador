@@ -1,33 +1,7 @@
 {% extends "base.html" %}
-{% from "macros/icons.html" import lucide_icon %}
 
 {% block content %}
 <div id="workspace" class="space-y-6">
-    <!-- Estado inicial minimalista para carga manual -->
-    <section class="surface-card p-10 sm:p-14 text-center max-w-2xl mx-auto mt-6">
-        <div class="inline-flex items-center justify-center w-11 h-11 rounded-full surface-subtle text-accent mb-4">
-            {{ lucide_icon("file-spreadsheet", "w-5 h-5") }}
-        </div>
-        <h1 class="text-xl sm:text-2xl font-semibold text-primary heading-tight">
-            Audita y explora tus datos en segundos
-        </h1>
-        <p class="text-sm text-secondary mt-2 max-w-md mx-auto">
-            Detecta valores faltantes, duplicados y registros extremos, ejecuta limpieza reproducible y genera reportes listos para compartir.
-        </p>
-
-        <div class="mt-6 flex flex-col items-center gap-3">
-            <button
-                type="button"
-                onclick="window.openUploadModal()"
-                class="btn-primary px-5 py-2.5 text-sm"
-            >
-                {{ lucide_icon("upload", "w-4 h-4") }}
-                <span>Subir archivo CSV o Excel</span>
-            </button>
-            <span class="text-xs text-muted">
-                También puedes arrastrar el archivo directamente sobre esta ventana
-            </span>
-        </div>
-    </section>
+    {% include "partials/estado_inicial.html" %}
 </div>
 {% endblock %}

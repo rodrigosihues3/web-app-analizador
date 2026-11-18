@@ -1,0 +1,15 @@
+{% from "macros/icons.html" import lucide_icon %}
+{% include "partials/estado_inicial.html" %}
+
+<button
+    id="btn-abrir-modal-carga"
+    hx-swap-oob="true"
+    type="button"
+    onclick="window.openUploadModal()"
+    class="hidden btn-primary px-3.5 py-1.5 text-xs"
+>
+    {{ lucide_icon("upload", "w-3.5 h-3.5") }}
+    <span>Analizar nuevo archivo</span>
+</button>
+
+<input type="hidden" id="session-actual" hx-swap-oob="true" name="session_id" value="">

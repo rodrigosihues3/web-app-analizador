@@ -99,6 +99,17 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
             auditor_xl = DatasetAuditor(str(ruta_xlsx))
             self.assertEqual(auditor_xl.auditar_estructura()["filas"], 2)
 
+            # CSV delimitado por punto y coma (;)
+            ruta_pc = tmp_path / "punto_coma.csv"
+            ruta_pc.write_text(
+                "Codigo;Nombre;Nota1;Nota2\nA1;Ana;15;18\nA2;Luis;14;16\n",
+                encoding="utf-8",
+            )
+            auditor_pc = DatasetAuditor(str(ruta_pc))
+            aud_pc = auditor_pc.auditar_estructura()
+            self.assertEqual(aud_pc["columnas"], 4)
+            self.assertEqual(aud_pc["filas"], 2)
+
             # CSV vacío
             ruta_vacia = tmp_path / "vacio.csv"
             ruta_vacia.write_text("", encoding="utf-8")

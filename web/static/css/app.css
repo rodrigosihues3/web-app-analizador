@@ -196,6 +196,27 @@ summary:focus-visible {
     transform: scale(0.97);
 }
 
+.btn-primary:disabled,
+.btn-primary[disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+    transform: none;
+}
+
+.btn-primary.hidden,
+.btn-secondary.hidden {
+    display: none;
+}
+
+.brand-wordmark {
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text);
+}
+
 .btn-secondary {
     display: inline-flex;
     align-items: center;
@@ -375,6 +396,32 @@ input[type="checkbox"] {
     background-color: var(--accent-soft);
 }
 
+.dropzone-area.has-file {
+    border-style: solid;
+    border-color: var(--accent);
+    background-color: var(--accent-soft);
+}
+
+/* Mensajes inline de validación (solo texto, sin bordes ni cajas) */
+.text-error-inline {
+    color: var(--status-danger-text);
+}
+
+.text-valid-inline {
+    color: var(--accent);
+}
+
+.status-fade {
+    opacity: 0;
+    transform: translateY(-2px);
+    transition: opacity 240ms var(--ease-out), transform 240ms var(--ease-out);
+}
+
+.status-fade.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
 /* Acordeón fluido sin saltos */
 .accordion-body {
     display: grid;
@@ -405,6 +452,10 @@ input[type="checkbox"] {
     position: relative;
     display: inline-flex;
     align-items: center;
+}
+
+.tooltip-wrapper.is-open {
+    z-index: 50;
 }
 
 .tooltip-trigger {
@@ -456,6 +507,44 @@ input[type="checkbox"] {
     opacity: 1;
     pointer-events: auto;
     transform: translateX(-50%) scale(1);
+}
+
+.tooltip-popover.align-right {
+    left: auto;
+    right: 0;
+    transform: scale(0.96);
+    transform-origin: bottom right;
+}
+
+.tooltip-wrapper:hover .tooltip-popover.align-right,
+.tooltip-wrapper.is-open .tooltip-popover.align-right {
+    transform: scale(1);
+}
+
+.tooltip-popover.align-left {
+    left: 0;
+    right: auto;
+    transform: scale(0.96);
+    transform-origin: bottom left;
+}
+
+.tooltip-wrapper:hover .tooltip-popover.align-left,
+.tooltip-wrapper.is-open .tooltip-popover.align-left {
+    transform: scale(1);
+}
+
+.tooltip-popover.place-bottom {
+    bottom: auto;
+    top: calc(100% + 8px);
+    transform-origin: top center;
+}
+
+.tooltip-popover.place-bottom.align-right {
+    transform-origin: top right;
+}
+
+.tooltip-popover.place-bottom.align-left {
+    transform-origin: top left;
 }
 
 /* Indicadores HTMX */

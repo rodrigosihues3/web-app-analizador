@@ -71,13 +71,19 @@ def _interpretar_booleano(valor: str | bool | None) -> bool:
 
 def _seleccionar_columnas_por_tipo(
     esquema: list[dict[str, Any]],
+    columnas_varianza_cero: list[str] | None = None,
 ) -> tuple[list[str], list[str], str, str]:
     """Clasifica columnas categóricas y numéricas sugiriendo valores iniciales."""
+    constantes = set(columnas_varianza_cero or [])
     cols_numericas = [
         str(col["columna"])
         for col in esquema
         if col.get("tipo_logico") == "numerica"
     ]
+    cols_numericas_utiles = [
+        c for c in cols_numericas if c not in constantes
+    ] or cols_numericas
+
     cols_categoricas = [
         str(col["columna"])
         for col in esquema
@@ -100,11 +106,13 @@ def _seleccionar_columnas_por_tipo(
     )
 
     metricas_preferidas = {"Nota", "Total_Venta"}
-    num_preferidas = [c for c in cols_numericas if c in metricas_preferidas]
+    num_preferidas = [
+        c for c in cols_numericas_utiles if c in metricas_preferidas
+    ]
     num_default = (
         num_preferidas[0]
         if num_preferidas
-        else (cols_numericas[0] if cols_numericas else "")
+        else (cols_numericas_utiles[0] if cols_numericas_utiles else "")
     )
 
     return cols_categoricas, cols_numericas, cat_default, num_default
@@ -167,6 +175,16 @@ async def _materializar_archivo_sesion(
     )
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> Response:
+    """Retorna un icono SVG minimalista local para evitar 404 en navegadores."""
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">'
+        '<circle cx="8" cy="8" r="6" fill="#0f766e"/></svg>'
+    )
+    return Response(content=svg, media_type="image/svg+xml")
+
+
 @app.get("/", response_class=HTMLResponse)
 async def pagina_inicio(request: Request) -> HTMLResponse:
     """Renderiza la vista principal limpia lista para carga manual."""
@@ -204,7 +222,9 @@ async def cargar_y_auditar_dataset(
             cols_numericas,
             cat_default,
             num_default,
-        ) = _seleccionar_columnas_por_tipo(auditoria["esquema"])
+        ) = _seleccionar_columnas_por_tipo(
+            auditoria["esquema"], auditoria.get("columnas_varianza_cero", [])
+        )
 
         total_nulos = sum(
             int(item.get("nulos", 0)) for item in auditoria["esquema"]
@@ -276,6 +296,34 @@ async def cargar_y_auditar_dataset(
             detalle=str(exc),
             codigo_estado=200,
         )
+
+
+@app.post("/analizar/restaurar", response_class=HTMLResponse)
+async def restaurar_estado_inicial(
+    request: Request,
+    session_id: str | None = Form(default=None),
+) -> HTMLResponse:
+    """Limpia la sesión activa y su archivo temporal, restaurando el inicio."""
+    if session_id:
+        id_limpio = session_id.strip()
+        sesion = SESIONES.pop(id_limpio, None)
+        if sesion and sesion.get("ruta_archivo"):
+            ruta_temp = Path(str(sesion["ruta_archivo"]))
+            if ruta_temp.exists():
+                try:
+                    ruta_temp.unlink()
+                except OSError as exc:
+                    logger.warning(
+                        "No se pudo eliminar archivo temporal '%s': %s",
+                        ruta_temp,
+                        exc,
+                    )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/estado_inicial_oob.html",
+        context={},
+    )
 
 
 @app.post("/analizar/regenerar-resumen", response_class=HTMLResponse)

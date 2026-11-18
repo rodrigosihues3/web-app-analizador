@@ -60,14 +60,28 @@ class DatasetAuditor:
         self.df_raw: pd.DataFrame = df_cargado.copy(deep=True)
 
     @staticmethod
+    def _leer_csv_con_delimitador(ruta: Path, encoding: str) -> pd.DataFrame:
+        """Lee un CSV detectando automáticamente separadores ';' o tabulación."""
+        df = pd.read_csv(ruta, encoding=encoding)
+        if len(df.columns) == 1:
+            encabezado = str(df.columns[0])
+            if ";" in encabezado or "\t" in encabezado:
+                return pd.read_csv(
+                    ruta, encoding=encoding, sep=None, engine="python"
+                )
+        return df
+
+    @staticmethod
     def _cargar_archivo(ruta: Path, extension: str) -> pd.DataFrame:
         """Lee un archivo CSV o Excel aplicando manejo estricto de errores."""
         if extension == ".csv":
             try:
-                return pd.read_csv(ruta, encoding="utf-8")
+                return DatasetAuditor._leer_csv_con_delimitador(ruta, "utf-8")
             except UnicodeDecodeError:
                 try:
-                    return pd.read_csv(ruta, encoding="latin-1")
+                    return DatasetAuditor._leer_csv_con_delimitador(
+                        ruta, "latin-1"
+                    )
                 except (
                     UnicodeDecodeError,
                     pd.errors.EmptyDataError,

@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Analizador de Datos{% endblock %}</title>
+    <link rel="icon" href="/favicon.ico">
     <script>
         (function () {
             try {
@@ -26,20 +27,30 @@
     <!-- Barra superior fija compacta -->
     <header class="navbar-sticky">
         <div class="max-w-6xl mx-auto h-full px-4 sm:px-6 flex items-center justify-between gap-4">
-            <a href="/" class="flex items-center gap-2.5 text-primary no-underline focus-visible:outline-none">
-                <span class="inline-block w-2.5 h-2.5 rounded-full" style="background-color: var(--accent);"></span>
-                <span class="text-base font-semibold heading-tight">Analizador de Datos</span>
-            </a>
+            <button
+                type="button"
+                id="btn-marca-inicio"
+                hx-post="/analizar/restaurar"
+                hx-include="#session-actual"
+                hx-target="#workspace"
+                hx-swap="innerHTML"
+                class="brand-wordmark bg-transparent border-0 p-0 cursor-pointer text-left"
+                title="Volver al inicio"
+            >
+                Analizador de Datos
+            </button>
 
             <div class="flex items-center gap-2">
+                <input type="hidden" id="session-actual" name="session_id" value="">
+
                 <button
-                    type="button"
                     id="btn-abrir-modal-carga"
+                    type="button"
                     onclick="window.openUploadModal()"
-                    class="btn-primary px-3.5 py-1.5 text-sm"
+                    class="hidden btn-primary px-3.5 py-1.5 text-xs"
                 >
-                    {{ lucide_icon("upload", "w-4 h-4") }}
-                    <span>Subir archivo</span>
+                    {{ lucide_icon("upload", "w-3.5 h-3.5") }}
+                    <span>Analizar nuevo archivo</span>
                 </button>
 
                 <button
@@ -62,15 +73,7 @@
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Pie discreto -->
-    <footer class="border-t border-hairline mt-12">
-        <div class="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted">
-            <span>Analizador de Datos · Procesamiento local</span>
-            <span>Formatos compatibles: CSV y Excel (.xlsx)</span>
-        </div>
-    </footer>
-
-    <!-- Modal global de carga (clic o arrastrar y soltar) -->
+    <!-- Modal de carga (disponible cuando ya existe un análisis activo) -->
     <div
         id="modal-carga"
         class="modal-backdrop"
@@ -83,7 +86,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <h2 id="modal-carga-titulo" class="text-base font-semibold text-primary heading-tight">
-                        Cargar archivo de datos
+                        Analizar nuevo archivo
                     </h2>
                     <p class="text-xs text-secondary mt-0.5">
                         El archivo original permanece intacto durante todo el análisis.
@@ -104,7 +107,8 @@
                 hx-post="/analizar/cargar"
                 hx-target="#workspace"
                 hx-encoding="multipart/form-data"
-                hx-indicator="#indicador-carga-modal"
+                hx-sync="this:drop"
+                hx-disabled-elt="find button[type='submit']"
                 class="space-y-4"
             >
                 <label
@@ -112,7 +116,7 @@
                     for="input-archivo-modal"
                     class="dropzone-area block p-8 text-center cursor-pointer"
                 >
-                    <div class="flex flex-col items-center gap-2.5">
+                    <div id="modal-estado-vacio" class="flex flex-col items-center gap-2.5">
                         <span class="p-2.5 rounded-full surface-card text-accent">
                             {{ lucide_icon("upload", "w-5 h-5") }}
                         </span>
@@ -122,8 +126,27 @@
                         <div class="text-xs text-muted">
                             Solo archivos tabulares .csv o .xlsx
                         </div>
-                        <div id="modal-archivo-nombre" class="hidden text-xs font-mono text-accent mt-1"></div>
                     </div>
+
+                    <div id="modal-estado-verificando" class="hidden flex-col items-center gap-2">
+                        <span class="p-2.5 rounded-full surface-card text-accent">
+                            <span class="icon-spin inline-flex">{{ lucide_icon("refresh-cw", "w-5 h-5") }}</span>
+                        </span>
+                        <div class="text-sm font-medium text-primary">Verificando archivo...</div>
+                        <div id="modal-nombre-verificando" class="text-xs font-mono text-muted"></div>
+                    </div>
+
+                    <div id="modal-estado-archivo" class="hidden flex-col items-center gap-2">
+                        <span class="p-2.5 rounded-full surface-card text-accent">
+                            {{ lucide_icon("file-spreadsheet", "w-5 h-5") }}
+                        </span>
+                        <div id="modal-archivo-nombre" class="text-sm font-semibold text-primary break-all"></div>
+                        <div id="modal-archivo-meta" class="text-xs font-mono text-accent tabular-nums"></div>
+                        <div class="text-xs text-muted mt-0.5">
+                            Haz clic o arrastra otro archivo para cambiarlo
+                        </div>
+                    </div>
+
                     <input
                         id="input-archivo-modal"
                         name="archivo"
@@ -133,29 +156,36 @@
                     >
                 </label>
 
-                <div id="modal-error-archivo" class="hidden text-xs px-3 py-2 rounded-md badge-danger"></div>
+                <div class="min-h-[1.25rem] text-center">
+                    <p id="modal-estado-valido" class="hidden status-fade text-xs font-medium text-valid-inline">
+                        Archivo válido
+                    </p>
+                    <p id="modal-error-archivo" class="hidden text-xs font-medium text-error-inline"></p>
+                </div>
 
-                <div class="flex items-center justify-between gap-3">
-                    <div id="indicador-carga-modal" class="htmx-indicator items-center gap-2 text-xs text-secondary">
-                        <span class="icon-spin inline-flex">{{ lucide_icon("refresh-cw", "w-3.5 h-3.5") }}</span>
-                        <span>Leyendo y auditando estructura...</span>
-                    </div>
-
-                    <div class="flex items-center gap-2 ml-auto">
-                        <button
-                            type="button"
-                            onclick="window.closeUploadModal()"
-                            class="btn-secondary px-3.5 py-1.5 text-sm"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="submit"
-                            class="btn-primary px-4 py-1.5 text-sm"
-                        >
-                            Analizar archivo
-                        </button>
-                    </div>
+                <div class="flex items-center justify-end gap-2">
+                    <button
+                        type="button"
+                        onclick="window.closeUploadModal()"
+                        class="btn-secondary px-3.5 py-1.5 text-sm"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        id="btn-analizar-modal"
+                        type="submit"
+                        disabled
+                        class="btn-primary px-4 py-1.5 text-sm"
+                    >
+                        <span class="hide-on-request inline-flex items-center gap-1.5">
+                            {{ lucide_icon("file-search", "w-4 h-4") }}
+                            <span>Analizar este archivo</span>
+                        </span>
+                        <span class="htmx-indicator items-center gap-1.5">
+                            <span class="icon-spin inline-flex">{{ lucide_icon("refresh-cw", "w-3.5 h-3.5") }}</span>
+                            <span>Analizando...</span>
+                        </span>
+                    </button>
                 </div>
             </form>
         </div>
@@ -164,15 +194,21 @@
     <script>
         (function () {
             var modal = document.getElementById("modal-carga");
-            var dropzone = document.getElementById("modal-dropzone");
-            var fileInput = document.getElementById("input-archivo-modal");
-            var fileNameEl = document.getElementById("modal-archivo-nombre");
-            var errorEl = document.getElementById("modal-error-archivo");
-            var uploadForm = document.getElementById("form-carga-modal");
+            var modalDropzone = document.getElementById("modal-dropzone");
+            var modalInput = document.getElementById("input-archivo-modal");
+            var modalFileNameEl = document.getElementById("modal-archivo-nombre");
+            var modalErrorEl = document.getElementById("modal-error-archivo");
+            var modalSubmitBtn = document.getElementById("btn-analizar-modal");
+            var modalForm = document.getElementById("form-carga-modal");
             var dragDepth = 0;
 
             function isDarkTheme() {
                 return document.documentElement.getAttribute("data-theme") === "dark";
+            }
+
+            function hasActiveSession() {
+                var sessEl = document.getElementById("session-actual");
+                return Boolean(sessEl && sessEl.value && sessEl.value.trim() !== "");
             }
 
             window.updatePlotlyTheme = function (container) {
@@ -220,9 +256,9 @@
 
             window.openUploadModal = function () {
                 if (!modal) return;
-                if (errorEl) {
-                    errorEl.classList.add("hidden");
-                    errorEl.textContent = "";
+                if (modalErrorEl) {
+                    modalErrorEl.classList.add("hidden");
+                    modalErrorEl.textContent = "";
                 }
                 modal.classList.add("is-open");
                 modal.setAttribute("aria-hidden", "false");
@@ -232,7 +268,7 @@
                 if (!modal) return;
                 modal.classList.remove("is-open");
                 modal.setAttribute("aria-hidden", "true");
-                if (dropzone) dropzone.classList.remove("is-dragover");
+                if (modalDropzone) modalDropzone.classList.remove("is-dragover");
                 dragDepth = 0;
             };
 
@@ -281,35 +317,209 @@
                 });
             };
 
-            function handleSelectedFile(file) {
-                if (!file) return;
-                var lower = file.name.toLowerCase();
-                if (!lower.endsWith(".csv") && !lower.endsWith(".xlsx")) {
-                    if (errorEl) {
-                        errorEl.textContent = "Formato no compatible. Selecciona un archivo .csv o .xlsx.";
-                        errorEl.classList.remove("hidden");
+            function formatFileSize(bytes) {
+                if (bytes < 1024) return bytes + " B";
+                var kb = bytes / 1024;
+                if (kb < 1024) return kb.toFixed(1) + " KB";
+                return (kb / 1024).toFixed(2) + " MB";
+            }
+
+            function inspectFileContent(file) {
+                return new Promise(function (resolve) {
+                    var lower = file.name.toLowerCase();
+                    if (!lower.endsWith(".csv") && !lower.endsWith(".xlsx")) {
+                        resolve({ ok: false, error: "Formato no compatible. Selecciona un archivo .csv o .xlsx." });
+                        return;
                     }
-                    return;
-                }
-                if (errorEl) {
-                    errorEl.classList.add("hidden");
-                    errorEl.textContent = "";
-                }
-                if (fileNameEl) {
-                    fileNameEl.textContent = "Archivo seleccionado: " + file.name;
-                    fileNameEl.classList.remove("hidden");
-                }
-                if (uploadForm && typeof uploadForm.requestSubmit === "function") {
-                    uploadForm.requestSubmit();
-                } else if (uploadForm) {
-                    htmx.trigger(uploadForm, "submit");
+                    if (file.size === 0) {
+                        resolve({ ok: false, error: "El archivo está vacío (0 KB). Selecciona un archivo con datos." });
+                        return;
+                    }
+
+                    var slice = file.slice(0, 4096);
+                    slice.arrayBuffer().then(function (buf) {
+                        var bytes = new Uint8Array(buf);
+                        if (lower.endsWith(".xlsx")) {
+                            var isZip = bytes.length >= 4 &&
+                                bytes[0] === 0x50 && bytes[1] === 0x4b &&
+                                bytes[2] === 0x03 && bytes[3] === 0x04;
+                            if (!isZip) {
+                                resolve({ ok: false, error: "El contenido no corresponde a un archivo Excel (.xlsx) válido." });
+                                return;
+                            }
+                            resolve({ ok: true, ext: "XLSX" });
+                            return;
+                        }
+
+                        var isBinarySig =
+                            (bytes.length >= 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) ||
+                            (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) ||
+                            (bytes.length >= 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) ||
+                            (bytes.length >= 4 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) ||
+                            (bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04);
+                        if (isBinarySig) {
+                            resolve({ ok: false, error: "El archivo parece binario o de imagen, no un CSV de texto." });
+                            return;
+                        }
+
+                        var hasNullByte = false;
+                        var hasNonWhitespace = false;
+                        for (var i = 0; i < bytes.length; i++) {
+                            if (bytes[i] === 0) {
+                                hasNullByte = true;
+                                break;
+                            }
+                            if (bytes[i] !== 32 && bytes[i] !== 9 && bytes[i] !== 10 && bytes[i] !== 13) {
+                                hasNonWhitespace = true;
+                            }
+                        }
+                        if (hasNullByte) {
+                            resolve({ ok: false, error: "El archivo contiene datos binarios incompatibles con CSV." });
+                            return;
+                        }
+                        if (!hasNonWhitespace) {
+                            resolve({ ok: false, error: "El archivo CSV no contiene registros legibles." });
+                            return;
+                        }
+                        resolve({ ok: true, ext: "CSV" });
+                    }).catch(function () {
+                        resolve({ ok: false, error: "No se pudo leer el contenido del archivo." });
+                    });
+                });
+            }
+
+            function getUploadRefs(prefix) {
+                return {
+                    dropzone: document.getElementById(prefix + "-dropzone"),
+                    input: document.getElementById("input-archivo-" + prefix),
+                    emptyState: document.getElementById(prefix + "-estado-vacio"),
+                    verifyingState: document.getElementById(prefix + "-estado-verificando"),
+                    verifyingName: document.getElementById(prefix + "-nombre-verificando"),
+                    fileState: document.getElementById(prefix + "-estado-archivo"),
+                    fileNameEl: document.getElementById(prefix + "-archivo-nombre"),
+                    fileMetaEl: document.getElementById(prefix + "-archivo-meta"),
+                    validMsgEl: document.getElementById(prefix + "-estado-valido"),
+                    errorEl: document.getElementById(prefix + "-error-archivo"),
+                    submitBtn: document.getElementById("btn-analizar-" + prefix)
+                };
+            }
+
+            function setFlexState(el, visible) {
+                if (!el) return;
+                if (visible) {
+                    el.classList.remove("hidden");
+                    el.classList.add("flex");
+                } else {
+                    el.classList.add("hidden");
+                    el.classList.remove("flex");
                 }
             }
 
-            if (fileInput) {
-                fileInput.addEventListener("change", function () {
-                    if (fileInput.files && fileInput.files.length > 0) {
-                        handleSelectedFile(fileInput.files[0]);
+            var validMessageTimers = {};
+
+            function resetUploadVisual(prefix) {
+                var r = getUploadRefs(prefix);
+                if (validMessageTimers[prefix]) {
+                    clearTimeout(validMessageTimers[prefix]);
+                    delete validMessageTimers[prefix];
+                }
+                if (r.dropzone) r.dropzone.classList.remove("has-file");
+                setFlexState(r.emptyState, true);
+                setFlexState(r.verifyingState, false);
+                setFlexState(r.fileState, false);
+                if (r.validMsgEl) {
+                    r.validMsgEl.classList.remove("is-visible");
+                    r.validMsgEl.classList.add("hidden");
+                }
+                if (r.errorEl) {
+                    r.errorEl.classList.add("hidden");
+                    r.errorEl.textContent = "";
+                }
+                if (r.submitBtn) r.submitBtn.disabled = true;
+            }
+
+            function validateAndPreview(file, prefix) {
+                if (!file) return;
+                var r = getUploadRefs(prefix);
+                if (validMessageTimers[prefix]) {
+                    clearTimeout(validMessageTimers[prefix]);
+                    delete validMessageTimers[prefix];
+                }
+
+                if (r.dropzone) r.dropzone.classList.remove("has-file");
+                setFlexState(r.emptyState, false);
+                setFlexState(r.fileState, false);
+                setFlexState(r.verifyingState, true);
+                if (r.verifyingName) r.verifyingName.textContent = file.name;
+                if (r.errorEl) {
+                    r.errorEl.classList.add("hidden");
+                    r.errorEl.textContent = "";
+                }
+                if (r.validMsgEl) {
+                    r.validMsgEl.classList.remove("is-visible");
+                    r.validMsgEl.classList.add("hidden");
+                }
+                if (r.submitBtn) r.submitBtn.disabled = true;
+
+                var start = Date.now();
+                inspectFileContent(file).then(function (res) {
+                    var elapsed = Date.now() - start;
+                    var delay = Math.max(0, 420 - elapsed);
+                    setTimeout(function () {
+                        setFlexState(r.verifyingState, false);
+                        if (!res.ok) {
+                            if (r.input) r.input.value = "";
+                            setFlexState(r.emptyState, true);
+                            if (r.errorEl) {
+                                r.errorEl.textContent = res.error;
+                                r.errorEl.classList.remove("hidden");
+                            }
+                            if (r.submitBtn) r.submitBtn.disabled = true;
+                            return;
+                        }
+
+                        if (r.dropzone) r.dropzone.classList.add("has-file");
+                        if (r.fileNameEl) r.fileNameEl.textContent = file.name;
+                        if (r.fileMetaEl) {
+                            r.fileMetaEl.textContent = formatFileSize(file.size) + " · " + res.ext;
+                        }
+                        setFlexState(r.fileState, true);
+                        if (r.submitBtn) r.submitBtn.disabled = false;
+
+                        if (r.validMsgEl) {
+                            r.validMsgEl.classList.remove("hidden");
+                            window.requestAnimationFrame(function () {
+                                r.validMsgEl.classList.add("is-visible");
+                            });
+                            validMessageTimers[prefix] = setTimeout(function () {
+                                r.validMsgEl.classList.remove("is-visible");
+                                setTimeout(function () {
+                                    if (!r.validMsgEl.classList.contains("is-visible")) {
+                                        r.validMsgEl.classList.add("hidden");
+                                    }
+                                }, 260);
+                            }, 4500);
+                        }
+                    }, delay);
+                });
+            }
+
+            function bindInitialDropzone() {
+                var inicioInput = document.getElementById("input-archivo-inicio");
+                if (inicioInput && !inicioInput.dataset.bound) {
+                    inicioInput.dataset.bound = "true";
+                    inicioInput.addEventListener("change", function () {
+                        if (inicioInput.files && inicioInput.files.length > 0) {
+                            validateAndPreview(inicioInput.files[0], "inicio");
+                        }
+                    });
+                }
+            }
+
+            if (modalInput) {
+                modalInput.addEventListener("change", function () {
+                    if (modalInput.files && modalInput.files.length > 0) {
+                        validateAndPreview(modalInput.files[0], "modal");
                     }
                 });
             }
@@ -340,22 +550,34 @@
                 if (!hasFiles(evt)) return;
                 evt.preventDefault();
                 dragDepth += 1;
-                window.openUploadModal();
-                if (dropzone) dropzone.classList.add("is-dragover");
+                if (hasActiveSession()) {
+                    window.openUploadModal();
+                    if (modalDropzone) modalDropzone.classList.add("is-dragover");
+                } else {
+                    var inicioDrop = document.getElementById("inicio-dropzone");
+                    if (inicioDrop) inicioDrop.classList.add("is-dragover");
+                }
             });
 
             window.addEventListener("dragover", function (evt) {
                 if (!hasFiles(evt)) return;
                 evt.preventDefault();
                 if (evt.dataTransfer) evt.dataTransfer.dropEffect = "copy";
-                if (dropzone) dropzone.classList.add("is-dragover");
+                if (hasActiveSession()) {
+                    if (modalDropzone) modalDropzone.classList.add("is-dragover");
+                } else {
+                    var inicioDrop = document.getElementById("inicio-dropzone");
+                    if (inicioDrop) inicioDrop.classList.add("is-dragover");
+                }
             });
 
             window.addEventListener("dragleave", function (evt) {
                 if (!hasFiles(evt)) return;
                 dragDepth = Math.max(0, dragDepth - 1);
-                if (dragDepth === 0 && dropzone) {
-                    dropzone.classList.remove("is-dragover");
+                if (dragDepth === 0) {
+                    if (modalDropzone) modalDropzone.classList.remove("is-dragover");
+                    var inicioDrop = document.getElementById("inicio-dropzone");
+                    if (inicioDrop) inicioDrop.classList.remove("is-dragover");
                 }
             });
 
@@ -363,20 +585,55 @@
                 if (!hasFiles(evt)) return;
                 evt.preventDefault();
                 dragDepth = 0;
-                if (dropzone) dropzone.classList.remove("is-dragover");
+                if (modalDropzone) modalDropzone.classList.remove("is-dragover");
+                var inicioDrop = document.getElementById("inicio-dropzone");
+                if (inicioDrop) inicioDrop.classList.remove("is-dragover");
+
                 var files = evt.dataTransfer.files;
-                if (files && files.length > 0 && fileInput) {
+                if (!files || files.length === 0) return;
+
+                if (hasActiveSession() && modalInput) {
                     try {
-                        var dt = new DataTransfer();
-                        dt.items.add(files[0]);
-                        fileInput.files = dt.files;
+                        var dtModal = new DataTransfer();
+                        dtModal.items.add(files[0]);
+                        modalInput.files = dtModal.files;
                     } catch (err) {}
                     window.openUploadModal();
-                    handleSelectedFile(files[0]);
+                    validateAndPreview(files[0], "modal");
+                } else {
+                    var inicioInput = document.getElementById("input-archivo-inicio");
+                    if (inicioInput) {
+                        try {
+                            var dtInicio = new DataTransfer();
+                            dtInicio.items.add(files[0]);
+                            inicioInput.files = dtInicio.files;
+                        } catch (err) {}
+                        validateAndPreview(files[0], "inicio");
+                    }
                 }
             });
 
-            /* Soporte táctil / clic para tooltips ? */
+            /* Posicionamiento inteligente de tooltips ? para evitar recortes en bordes */
+            function adjustTooltipPosition(wrapper) {
+                var popover = wrapper.querySelector(".tooltip-popover");
+                if (!popover) return;
+                popover.classList.remove("align-left", "align-right", "place-bottom");
+                var rect = popover.getBoundingClientRect();
+                if (rect.right > window.innerWidth - 12) {
+                    popover.classList.add("align-right");
+                } else if (rect.left < 12) {
+                    popover.classList.add("align-left");
+                }
+                if (rect.top < 64) {
+                    popover.classList.add("place-bottom");
+                }
+            }
+
+            document.addEventListener("mouseenter", function (evt) {
+                var wrapper = evt.target && evt.target.closest ? evt.target.closest(".tooltip-wrapper") : null;
+                if (wrapper) adjustTooltipPosition(wrapper);
+            }, true);
+
             document.addEventListener("click", function (evt) {
                 var trigger = evt.target.closest ? evt.target.closest(".tooltip-trigger") : null;
                 document.querySelectorAll(".tooltip-wrapper.is-open").forEach(function (w) {
@@ -388,7 +645,10 @@
                     evt.preventDefault();
                     evt.stopPropagation();
                     var wrapper = trigger.closest(".tooltip-wrapper");
-                    if (wrapper) wrapper.classList.toggle("is-open");
+                    if (wrapper) {
+                        adjustTooltipPosition(wrapper);
+                        wrapper.classList.toggle("is-open");
+                    }
                 }
             });
 
@@ -406,11 +666,9 @@
 
                 if (target.id === "workspace") {
                     window.closeUploadModal();
-                    if (uploadForm) uploadForm.reset();
-                    if (fileNameEl) {
-                        fileNameEl.classList.add("hidden");
-                        fileNameEl.textContent = "";
-                    }
+                    if (modalForm) modalForm.reset();
+                    resetUploadVisual("modal");
+                    bindInitialDropzone();
                 }
 
                 if (target.id === "resultados-analisis") {
@@ -426,6 +684,8 @@
                 var elt = evt.detail && evt.detail.elt;
                 if (elt) window.updatePlotlyTheme(elt);
             });
+
+            bindInitialDropzone();
         })();
     </script>
 </body>

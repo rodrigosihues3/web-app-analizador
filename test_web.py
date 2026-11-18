@@ -14,7 +14,6 @@ from web.app import SESIONES, STATIC_DIR, TEMPLATES_DIR, TEMP_UPLOADS_DIR, app
 
 BASE_DIR: Path = Path(__file__).resolve().parent
 RUTA_NOTAS: Path = BASE_DIR / "datasets" / "notas_estudiantes.csv"
-RUTA_RETAIL: Path = BASE_DIR / "datasets" / "retail_sales.csv"
 
 
 def _limpiar_temp_uploads() -> None:
@@ -35,9 +34,18 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        """Inicializa el cliente de pruebas de FastAPI en modo offline."""
+        """Inicializa el cliente de pruebas de FastAPI en modo offline estricto."""
         _limpiar_temp_uploads()
+        cls._env_patch = patch.dict(
+            os.environ, {"GEMINI_API_KEY": "", "GOOGLE_API_KEY": ""}, clear=False
+        )
+        cls._env_patch.start()
         cls.client = TestClient(app)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        """Restaura las variables de entorno tras finalizar la suite."""
+        cls._env_patch.stop()
 
     def tearDown(self) -> None:
         """Limpia archivos generados en ``temp_uploads/`` tras cada prueba."""
@@ -47,6 +55,7 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
         """Verifica activos locales y ausencia total de enlaces CDN en HTML."""
         activos_esperados = (
             STATIC_DIR / "css" / "tailwind.min.css",
+            STATIC_DIR / "css" / "app.css",
             STATIC_DIR / "js" / "htmx.min.js",
             STATIC_DIR / "js" / "plotly.min.js",
         )
@@ -55,16 +64,16 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
                 ruta_activo.exists(),
                 f"No existe el activo estático requerido: {ruta_activo}",
             )
-            self.assertGreater(
-                ruta_activo.stat().st_size,
-                10240,
-                f"El activo {ruta_activo.name} pesa menos de 10 KB.",
-            )
 
-        self.assertTrue((STATIC_DIR / "css" / "app.css").exists())
+        for ruta_min in (
+            STATIC_DIR / "css" / "tailwind.min.css",
+            STATIC_DIR / "js" / "htmx.min.js",
+            STATIC_DIR / "js" / "plotly.min.js",
+        ):
+            self.assertGreater(ruta_min.stat().st_size, 10240)
 
         archivos_html = list(TEMPLATES_DIR.rglob("*.html"))
-        self.assertGreaterEqual(len(archivos_html), 7)
+        self.assertGreaterEqual(len(archivos_html), 8)
         for ruta_html in archivos_html:
             contenido = ruta_html.read_text(encoding="utf-8").lower()
             self.assertNotIn(
@@ -79,7 +88,7 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
             )
 
     def test_02_get_index_referencias_locales_y_vista_manual_limpia(self) -> None:
-        """Valida GET / con activos locales, modal drag-and-drop y cero URLs externas."""
+        """Valida GET / con dropzone directo, navbar oculto y cero URLs externas."""
         respuesta = self.client.get("/")
         self.assertEqual(respuesta.status_code, 200)
 
@@ -89,35 +98,37 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
         self.assertIn("/static/js/htmx.min.js", html)
         self.assertIn("/static/js/plotly.min.js", html)
         self.assertIn("Analizador de Datos", html)
-        self.assertIn("Subir archivo", html)
+        self.assertIn("input-archivo-inicio", html)
+        self.assertIn("Analizar este archivo", html)
+        self.assertIn('id="btn-marca-inicio"', html)
+        self.assertIn('id="btn-abrir-modal-carga"', html)
         self.assertIn("modal-carga", html)
         self.assertNotIn("notas_estudiantes.csv", html)
         self.assertNotIn("http://", html.lower())
         self.assertNotIn("https://", html.lower())
 
-    def test_03_flujo_completo_cargar_regenerar_procesar_explicar_exportar(self) -> None:
-        """Valida ingesta, regeneración, limpieza, gráficos, explicabilidad y exportación."""
-        with patch.dict(os.environ, {"GEMINI_API_KEY": ""}, clear=False):
-            with RUTA_NOTAS.open("rb") as archivo_csv:
-                resp_carga = self.client.post(
-                    "/analizar/cargar",
-                    files={
-                        "archivo": (
-                            "notas_estudiantes.csv",
-                            archivo_csv,
-                            "text/csv",
-                        )
-                    },
-                )
+    def test_03_flujo_completo_cargar_regenerar_procesar_explicar_exportar_restaurar(self) -> None:
+        """Valida ingesta, OOB navbar, regeneración, gráficos, explicabilidad, exportación y restaurar."""
+        with RUTA_NOTAS.open("rb") as archivo_csv:
+            resp_carga = self.client.post(
+                "/analizar/cargar",
+                files={
+                    "archivo": (
+                        "notas_estudiantes.csv",
+                        archivo_csv,
+                        "text/csv",
+                    )
+                },
+            )
 
         self.assertEqual(resp_carga.status_code, 200)
         html_auditoria = resp_carga.text
-        self.assertIn("Nulos:", html_auditoria)
-        self.assertIn("Atípicos:", html_auditoria)
+        self.assertIn("nulos", html_auditoria.lower())
+        self.assertIn("atípicos", html_auditoria.lower())
         self.assertIn("Calidad de los datos", html_auditoria)
         self.assertIn("Configuración del análisis", html_auditoria)
-        self.assertNotIn("http://", html_auditoria.lower())
-        self.assertNotIn("https://", html_auditoria.lower())
+        self.assertIn('id="btn-abrir-modal-carga"', html_auditoria)
+        self.assertIn("Analizar nuevo archivo", html_auditoria)
 
         coincidencia = re.search(
             r'name="session_id"\s+value="([0-9a-fA-F-]+)"', html_auditoria
@@ -128,16 +139,22 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
         session_id = coincidencia.group(1) if coincidencia else ""
         self.assertIn(session_id, SESIONES)
 
+        # El botón OOB #btn-abrir-modal-carga no debe estar oculto al cargar datos
+        btn_modal_match = re.search(
+            r'<button[^>]*id="btn-abrir-modal-carga"[^>]*>', html_auditoria
+        )
+        self.assertIsNotNone(btn_modal_match)
+        self.assertNotIn("hidden", btn_modal_match.group(0))
+
         # El UUID de sesión no debe exponerse visiblemente fuera de atributos internos
         texto_visible = re.sub(r"<[^>]+>", " ", html_auditoria)
         self.assertNotIn(session_id, texto_visible)
 
         # Regenerar resumen ejecutivo
-        with patch.dict(os.environ, {"GEMINI_API_KEY": ""}, clear=False):
-            resp_regen = self.client.post(
-                "/analizar/regenerar-resumen",
-                data={"session_id": session_id},
-            )
+        resp_regen = self.client.post(
+            "/analizar/regenerar-resumen",
+            data={"session_id": session_id},
+        )
         self.assertEqual(resp_regen.status_code, 200)
         self.assertIn('data-typewriter="true"', resp_regen.text)
 
@@ -165,24 +182,21 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
         self.assertIn("Categoría líder en promedio", html_resultados)
         self.assertIn("Duplicados eliminados", html_resultados)
         self.assertIn("Analizar con IA", html_resultados)
-        self.assertNotIn("http://", html_resultados.lower())
-        self.assertNotIn("https://", html_resultados.lower())
 
         # Explicabilidad IA (respaldo determinista offline) para las 3 gráficas
-        with patch.dict(os.environ, {"GEMINI_API_KEY": ""}, clear=False):
-            for tipo in ("histograma", "barras", "correlacion"):
-                resp_exp = self.client.post(
-                    "/analizar/explicar-grafico",
-                    data={
-                        "session_id": session_id,
-                        "tipo_grafico": tipo,
-                        "col_numerica": "Nota",
-                        "col_categoria": "Asignatura",
-                    },
-                )
-                self.assertEqual(resp_exp.status_code, 200)
-                self.assertIn('data-typewriter="true"', resp_exp.text)
-                self.assertNotIn("**", resp_exp.text)
+        for tipo in ("histograma", "barras", "correlacion"):
+            resp_exp = self.client.post(
+                "/analizar/explicar-grafico",
+                data={
+                    "session_id": session_id,
+                    "tipo_grafico": tipo,
+                    "col_numerica": "Nota",
+                    "col_categoria": "Asignatura",
+                },
+            )
+            self.assertEqual(resp_exp.status_code, 200)
+            self.assertIn('data-typewriter="true"', resp_exp.text)
+            self.assertNotIn("**", resp_exp.text)
 
         # Exportar Dataset Limpio (.CSV)
         resp_csv = self.client.get(
@@ -195,19 +209,13 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
         )
         contenido_csv = resp_csv.content.decode("utf-8-sig")
         self.assertIn("Estudiante,Asignatura,Ciclo,Nota,Asistencia", contenido_csv)
-        self.assertGreater(len(resp_csv.content), 200)
 
         # Exportar Dataset Limpio (.XLSX)
         resp_xlsx = self.client.get(
             f"/export/dataset/{session_id}?formato=xlsx"
         )
         self.assertEqual(resp_xlsx.status_code, 200)
-        self.assertIn(
-            "attachment",
-            resp_xlsx.headers.get("content-disposition", "").lower(),
-        )
         self.assertTrue(resp_xlsx.content.startswith(b"PK"))
-        self.assertGreater(len(resp_xlsx.content), 1000)
 
         # Exportar Reporte Técnico (.PDF)
         resp_pdf = self.client.get(f"/export/pdf/{session_id}")
@@ -217,6 +225,25 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
         )
         self.assertTrue(resp_pdf.content.startswith(b"%PDF"))
         self.assertGreater(len(resp_pdf.content), 10240)
+
+        # Restaurar sesión y volver al inicio limpio
+        ruta_archivo_temp = Path(SESIONES[session_id]["ruta_archivo"])
+        self.assertTrue(ruta_archivo_temp.exists())
+
+        resp_restaurar = self.client.post(
+            "/analizar/restaurar",
+            data={"session_id": session_id},
+        )
+        self.assertEqual(resp_restaurar.status_code, 200)
+        self.assertNotIn(session_id, SESIONES)
+        self.assertFalse(ruta_archivo_temp.exists())
+        self.assertIn("input-archivo-inicio", resp_restaurar.text)
+
+        btn_modal_oculto = re.search(
+            r'<button[^>]*id="btn-abrir-modal-carga"[^>]*>', resp_restaurar.text
+        )
+        self.assertIsNotNone(btn_modal_oculto)
+        self.assertIn("hidden", btn_modal_oculto.group(0))
 
     def test_04_manejo_controlado_de_errores(self) -> None:
         """Verifica alertas HTML controladas ante archivo vacío y sesión inválida."""

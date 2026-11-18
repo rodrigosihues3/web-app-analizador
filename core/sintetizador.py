@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 
 MODELO_GEMINI = "gemini-2.5-flash"
 TIMEOUT_SEGUNDOS = 4.0
-TIMEOUT_MILISEGUNDOS = 4000
+# La API de Google GenAI exige un deadline de servidor >= 10s (10000 ms);
+# el corte estricto de 4.0s se mantiene en Python via ThreadPoolExecutor.
+TIMEOUT_MILISEGUNDOS = 10000
 
 
 class _RespuestaContextoSchema(BaseModel):

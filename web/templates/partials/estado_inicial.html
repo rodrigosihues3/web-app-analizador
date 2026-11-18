@@ -1,0 +1,102 @@
+{% from "macros/icons.html" import lucide_icon %}
+<section class="surface-card p-6 sm:p-8 max-w-2xl mx-auto mt-6 animate-enter">
+    <div class="mb-6 text-center">
+        <h1 class="text-xl sm:text-2xl font-bold text-primary heading-tight">
+            Audita y explora tus datos
+        </h1>
+        <p class="mt-2 max-w-sm mx-auto text-xs sm:text-sm text-secondary leading-relaxed">
+            Detecta nulos, duplicados y atípicos, limpia tus datos y exporta reportes.
+        </p>
+    </div>
+
+    <form
+        id="form-carga-inicio"
+        hx-post="/analizar/cargar"
+        hx-target="#workspace"
+        hx-encoding="multipart/form-data"
+        hx-sync="this:drop"
+        hx-disabled-elt="find button[type='submit']"
+        class="space-y-4"
+    >
+        <label
+            id="inicio-dropzone"
+            for="input-archivo-inicio"
+            class="dropzone-area block py-12 sm:py-14 px-6 text-center cursor-pointer"
+        >
+            <!-- Estado por defecto (sin archivo) -->
+            <div id="inicio-estado-vacio" class="flex flex-col items-center gap-3">
+                <span class="p-3 rounded-full surface-card text-accent">
+                    {{ lucide_icon("upload", "w-5 h-5") }}
+                </span>
+                <div class="text-sm font-medium text-primary">
+                    Arrastra tu archivo aquí o haz clic para seleccionarlo
+                </div>
+                <div class="text-xs text-muted">
+                    Solo archivos tabulares .csv o .xlsx
+                </div>
+            </div>
+
+            <!-- Estado verificando contenido -->
+            <div id="inicio-estado-verificando" class="hidden flex-col items-center gap-2.5">
+                <span class="p-3 rounded-full surface-card text-accent">
+                    <span class="icon-spin inline-flex">{{ lucide_icon("refresh-cw", "w-5 h-5") }}</span>
+                </span>
+                <div class="text-sm font-medium text-primary">
+                    Verificando archivo...
+                </div>
+                <div id="inicio-nombre-verificando" class="text-xs font-mono text-muted"></div>
+            </div>
+
+            <!-- Estado con archivo válido cargado -->
+            <div id="inicio-estado-archivo" class="hidden flex-col items-center gap-2.5">
+                <span class="p-3 rounded-full surface-card text-accent">
+                    {{ lucide_icon("file-spreadsheet", "w-5 h-5") }}
+                </span>
+                <div id="inicio-archivo-nombre" class="text-sm font-semibold text-primary break-all"></div>
+                <div id="inicio-archivo-meta" class="text-xs font-mono text-accent tabular-nums"></div>
+                <div class="text-xs text-muted mt-1">
+                    Haz clic o arrastra otro archivo para cambiarlo
+                </div>
+            </div>
+
+            <input
+                id="input-archivo-inicio"
+                name="archivo"
+                type="file"
+                accept=".csv,.xlsx"
+                class="sr-only"
+            >
+        </label>
+
+        <!-- Mensaje temporal de validación o error en texto plano -->
+        <div class="min-h-[1.25rem] text-center">
+            <p id="inicio-estado-valido" class="hidden status-fade text-xs font-medium text-valid-inline">
+                Archivo válido
+            </p>
+            <p id="inicio-error-archivo" class="hidden text-xs font-medium text-error-inline"></p>
+        </div>
+
+        <div class="flex flex-col items-center gap-2.5 pt-1">
+            {# Iconos disponibles en macros/icons.html para este botón: "file-search", "bar-chart-2", "scan-search", "play" #}
+            <button
+                id="btn-analizar-inicio"
+                type="submit"
+                disabled
+                class="btn-primary px-6 py-2.5 text-sm"
+            >
+                <span class="hide-on-request inline-flex items-center gap-2">
+                    {{ lucide_icon("file-search", "w-4 h-4") }}
+                    <span>Analizar este archivo</span>
+                </span>
+                <span class="htmx-indicator items-center gap-2">
+                    <span class="icon-spin inline-flex">{{ lucide_icon("refresh-cw", "w-4 h-4") }}</span>
+                    <span>Analizando archivo...</span>
+                </span>
+            </button>
+
+            <p class="text-xs text-muted text-center">
+                El archivo original permanece intacto durante todo el análisis.
+            </p>
+        </div>
+    </form>
+</section>
