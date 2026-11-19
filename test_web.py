@@ -44,7 +44,8 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls) -> None:
-        """Restaura las variables de entorno tras finalizar la suite."""
+        """Cierra el cliente de pruebas y restaura las variables de entorno."""
+        cls.client.close()
         cls._env_patch.stop()
 
     def tearDown(self) -> None:

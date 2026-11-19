@@ -28,15 +28,20 @@ TIMEOUT_MILISEGUNDOS = 10000
 
 
 class _RespuestaContextoSchema(BaseModel):
-    """Esquema estructurado esperado desde la API de Google GenAI."""
+    """Esquema Pydantic que obliga a Gemini a responder un JSON con 2 campos."""
 
     titulo_reporte: str
     resumen_ejecutivo: str
 
 
-def _limitar_lineas(texto: str, max_lineas: int = 3) -> str:
-    """Normaliza saltos de línea y recorta el resumen a un máximo de 3 líneas."""
-    lineas = [linea.strip() for linea in texto.strip().splitlines() if linea.strip()]
+def _normalizar_texto_plano(texto: str, max_lineas: int = 3) -> str:
+    """Elimina marcas Markdown básicas y limita el texto a un máximo de líneas."""
+    sin_md = texto.replace("**", "").replace("__", "").replace("`", "")
+    lineas = [
+        linea.lstrip("#-*• ").strip()
+        for linea in sin_md.strip().splitlines()
+        if linea.strip()
+    ]
     if not lineas:
         return ""
     return " ".join(lineas[:max_lineas])
@@ -146,7 +151,9 @@ def _invocar_gemini(
 
     datos = json.loads(texto_respuesta)
     titulo = str(datos.get("titulo_reporte", "")).strip()
-    resumen = _limitar_lineas(str(datos.get("resumen_ejecutivo", "")), max_lineas=3)
+    resumen = _normalizar_texto_plano(
+        str(datos.get("resumen_ejecutivo", "")), max_lineas=3
+    )
 
     if not titulo or not resumen:
         raise ValueError(
@@ -183,6 +190,7 @@ def generar_contexto_ejecutivo(
     esquema = auditoria.get("esquema", [])
     muestra = muestra_filas[:3] if isinstance(muestra_filas, list) else []
 
+    # ThreadPoolExecutor ejecuta la llamada en segundo plano para cortar a los 4.0s exactos
     executor = ThreadPoolExecutor(max_workers=1)
     try:
         futuro = executor.submit(_invocar_gemini, api_key, esquema, muestra)
@@ -202,19 +210,6 @@ def generar_contexto_ejecutivo(
         return _generar_respaldo_determinista(auditoria)
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
-
-
-def _limpiar_texto_plano(texto: str, max_lineas: int = 3) -> str:
-    """Elimina marcas Markdown básicas y limita el texto a un máximo de líneas."""
-    sin_md = texto.replace("**", "").replace("__", "").replace("`", "")
-    lineas = [
-        linea.lstrip("#-*• ").strip()
-        for linea in sin_md.strip().splitlines()
-        if linea.strip()
-    ]
-    if not lineas:
-        return ""
-    return " ".join(lineas[:max_lineas])
 
 
 def _generar_explicacion_grafico_local(
@@ -356,7 +351,9 @@ def _invocar_gemini_grafico(
         contents=prompt,
         config=types.GenerateContentConfig(temperature=0.2),
     )
-    texto = _limpiar_texto_plano(getattr(respuesta, "text", None) or "", max_lineas=3)
+    texto = _normalizar_texto_plano(
+        getattr(respuesta, "text", None) or "", max_lineas=3
+    )
     if not texto:
         raise ValueError("La respuesta de interpretación llegó vacía.")
     return texto
@@ -380,6 +377,7 @@ def explicar_grafico_ia(
     titulo_reporte = str(
         contexto_dataset.get("titulo_reporte", "Análisis de Dataset")
     )
+    # ThreadPoolExecutor ejecuta la llamada en segundo plano para cortar a los 4.0s exactos
     executor = ThreadPoolExecutor(max_workers=1)
     try:
         futuro = executor.submit(

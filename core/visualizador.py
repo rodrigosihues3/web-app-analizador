@@ -7,11 +7,14 @@ import logging
 
 import matplotlib
 
+# Backend 'Agg' genera imágenes PNG en memoria sin abrir ventanas gráficas
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+
+from core.utils import es_columna_numerica, obtener_columnas_numericas
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +44,7 @@ def _validar_columna_numerica(df: pd.DataFrame, columna: str) -> pd.Series:
         raise ValueError("El parámetro 'df' debe ser un pandas.DataFrame.")
     if columna not in df.columns:
         raise KeyError(f"La columna '{columna}' no existe en el dataset.")
-    if (
-        not pd.api.types.is_numeric_dtype(df[columna])
-        or pd.api.types.is_bool_dtype(df[columna])
-    ):
+    if not es_columna_numerica(df[columna]):
         raise ValueError(f"La columna '{columna}' debe ser numérica.")
 
     serie = df[columna].dropna().astype(float)
@@ -247,14 +247,7 @@ def generar_boxplot_plotly(
 ) -> str:
     """Genera un fragmento HTML de diagrama de caja interactivo Plotly.
 
-    Args:
-        df: DataFrame fuente.
-        columna: Columna numérica a analizar.
-        col_grupo: Columna categórica opcional para comparar distribuciones.
-
-    Returns:
-        Fragmento HTML generado mediante ``to_html(include_plotlyjs=False,
-        full_html=False)``.
+    Conservada para compatibilidad con la suite ``test_core.py`` y uso directo.
     """
     _validar_columna_numerica(df, columna)
 
@@ -326,12 +319,7 @@ def generar_heatmap_plotly(df: pd.DataFrame) -> str:
     if not isinstance(df, pd.DataFrame):
         raise ValueError("El parámetro 'df' debe ser un pandas.DataFrame.")
 
-    cols_num = [
-        str(col)
-        for col in df.columns
-        if pd.api.types.is_numeric_dtype(df[col])
-        and not pd.api.types.is_bool_dtype(df[col])
-    ]
+    cols_num = obtener_columnas_numericas(df)
 
     if len(cols_num) < 2:
         fig = go.Figure()
@@ -388,6 +376,7 @@ def generar_heatmap_plotly(df: pd.DataFrame) -> str:
 
 def _guardar_figura_bytes(fig: plt.Figure) -> io.BytesIO:
     """Serializa una figura Matplotlib a PNG en memoria a 150 DPI."""
+    # BytesIO actúa como archivo temporal en RAM para incrustar la imagen en el PDF
     buffer = io.BytesIO()
     fig.savefig(
         buffer,
@@ -403,26 +392,14 @@ def _guardar_figura_bytes(fig: plt.Figure) -> io.BytesIO:
 def generar_graficos_estaticos_pdf(
     df: pd.DataFrame,
 ) -> list[tuple[str, io.BytesIO]]:
-    """Genera hasta 3 gráficos PNG en memoria para incrustar en el reporte PDF.
-
-    Incluye histograma de la primera columna numérica, diagrama de caja
-    comparativo y matriz de correlación cuando existen al menos 2 métricas.
-
-    Args:
-        df: DataFrame depurado o de entrada.
-
-    Returns:
-        Lista de tuplas ``(titulo_grafico, buffer_png)`` listas para ReportLab.
-    """
+    """Genera hasta 3 gráficos PNG en memoria para incrustar en el reporte PDF."""
     if not isinstance(df, pd.DataFrame) or df.empty:
         return []
 
     cols_num = [
-        str(col)
-        for col in df.columns
-        if pd.api.types.is_numeric_dtype(df[col])
-        and not pd.api.types.is_bool_dtype(df[col])
-        and not df[col].dropna().empty
+        col
+        for col in obtener_columnas_numericas(df)
+        if not df[col].dropna().empty
     ]
     if not cols_num:
         return []

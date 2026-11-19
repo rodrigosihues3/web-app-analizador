@@ -7,17 +7,15 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from core.utils import (
+    calcular_limites_iqr,
+    es_columna_numerica,
+    obtener_columnas_numericas,
+)
+
 ESTRATEGIAS_NULOS_VALIDAS: frozenset[str] = frozenset(
     {"eliminar", "media", "mediana", "moda", "ninguna"}
 )
-
-
-def _es_columna_numerica(serie: pd.Series) -> bool:
-    """Retorna True si la serie es numérica continua/discreta y no booleana."""
-    return bool(
-        pd.api.types.is_numeric_dtype(serie)
-        and not pd.api.types.is_bool_dtype(serie)
-    )
 
 
 def _remover_duplicados(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
@@ -26,6 +24,7 @@ def _remover_duplicados(df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     if cantidad_duplicados == 0:
         return df.copy(deep=True), "Sin registros duplicados."
 
+    # reset_index(drop=True) regenera el índice 0..N-1 tras quitar filas repetidas
     df_sin_duplicados = df.drop_duplicates().reset_index(drop=True)
     return (
         df_sin_duplicados,
@@ -97,32 +96,26 @@ def _tratar_nulos(
     columnas_con_nulos = [
         col for col in df_nuevo.columns if int(df_nuevo[col].isna().sum()) > 0
     ]
-
     if not columnas_con_nulos:
         logs.append("Sin valores faltantes por completar.")
         return df_nuevo, logs
 
     for col in columnas_con_nulos:
-        n_nulos = int(df_nuevo[col].isna().sum())
         serie = df_nuevo[col]
+        n_nulos = int(serie.isna().sum())
 
-        if _es_columna_numerica(serie):
-            valor_imputado = _calcular_valor_imputacion_numerica(
-                serie, estrategia
-            )
-            if pd.api.types.is_integer_dtype(serie):
-                if float(valor_imputado).is_integer():
-                    df_nuevo[col] = serie.fillna(int(valor_imputado))
-                else:
-                    df_nuevo[col] = serie.astype("float64").fillna(
-                        valor_imputado
-                    )
+        if es_columna_numerica(serie):
+            valor = _calcular_valor_imputacion_numerica(serie, estrategia)
+            # Si la columna es entera y el valor imputado tiene decimales, convierte a float64
+            if pd.api.types.is_integer_dtype(serie) and not float(valor).is_integer():
+                df_nuevo[col] = serie.astype("float64").fillna(valor)
             else:
-                df_nuevo[col] = serie.fillna(valor_imputado)
+                relleno = int(valor) if pd.api.types.is_integer_dtype(serie) else valor
+                df_nuevo[col] = serie.fillna(relleno)
 
             logs.append(
                 f"'{col}': {n_nulos} dato(s) faltante(s) completado(s) con "
-                f"{estrategia} ({round(valor_imputado, 4)})."
+                f"{estrategia} ({round(valor, 4)})."
             )
         elif pd.api.types.is_datetime64_any_dtype(serie):
             modas_fecha = serie.dropna().mode()
@@ -134,11 +127,10 @@ def _tratar_nulos(
                     f"con {fecha_imp}."
                 )
             else:
-                logs.append(
-                    f"'{col}': sin fechas válidas para completar."
-                )
+                logs.append(f"'{col}': sin fechas válidas para completar.")
         else:
             valor_cat = _calcular_valor_imputacion_categorica(serie)
+            # En columnas tipo Categorical es obligatorio registrar una categoría nueva antes de fillna
             if isinstance(serie.dtype, pd.CategoricalDtype):
                 if valor_cat not in serie.cat.categories:
                     serie = serie.cat.add_categories([valor_cat])
@@ -156,39 +148,23 @@ def _recortar_outliers_iqr(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     df_nuevo = df.copy(deep=True)
     logs: list[str] = []
 
-    columnas_numericas = [
-        col for col in df_nuevo.columns if _es_columna_numerica(df_nuevo[col])
-    ]
-
-    for col in columnas_numericas:
-        serie = df_nuevo[col]
+    for col in obtener_columnas_numericas(df_nuevo):
         try:
-            valores_validos = serie.dropna().to_numpy(dtype=float)
-            if valores_validos.size == 0:
-                continue
-
-            q1 = float(np.percentile(valores_validos, 25))
-            q3 = float(np.percentile(valores_validos, 75))
-            iqr = q3 - q1
-            lim_inf = q1 - 1.5 * iqr
-            lim_sup = q3 + 1.5 * iqr
-
-            serie_float = serie.astype("float64")
-            mascara_outliers = (serie_float < lim_inf) | (
-                serie_float > lim_sup
+            _, _, _, lim_inf, lim_sup = calcular_limites_iqr(df_nuevo[col])
+            serie_float = df_nuevo[col].astype("float64")
+            cantidad_outliers = int(
+                ((serie_float < lim_inf) | (serie_float > lim_sup)).sum()
             )
-            cantidad_outliers = int(mascara_outliers.sum())
 
             if cantidad_outliers > 0:
+                # np.clip limita de forma vectorizada cualquier valor fuera de [lim_inf, lim_sup]
                 df_nuevo[col] = np.clip(serie_float, lim_inf, lim_sup)
                 logs.append(
                     f"'{col}': {cantidad_outliers} valor(es) extremo(s) ajustado(s) "
                     f"al rango [{round(lim_inf, 2)}, {round(lim_sup, 2)}]."
                 )
-        except (ValueError, TypeError, IndexError) as exc:
-            logs.append(
-                f"No fue posible ajustar extremos en '{col}': {exc}."
-            )
+        except (ValueError, TypeError, IndexError):
+            continue
 
     if not logs:
         logs.append("Sin valores extremos fuera de rango.")
@@ -202,23 +178,7 @@ def limpiar_dataset(
     estrategia_nulos: str = "mediana",
     recortar_outliers: bool = False,
 ) -> tuple[pd.DataFrame, list[str]]:
-    """Aplica limpieza funcional sin mutar el DataFrame original.
-
-    Args:
-        df: DataFrame de entrada que permanece intacto.
-        eliminar_duplicados: Si es True, elimina registros duplicados exactos.
-        estrategia_nulos: Estrategia en ``{"eliminar", "media", "mediana",
-            "moda", "ninguna"}``.
-        recortar_outliers: Si es True, acota atípicos IQR usando ``numpy.clip``.
-
-    Returns:
-        Tupla ``(df_limpio, logs)`` con el nuevo DataFrame depurado y la
-        bitácora cronológica de transformaciones aplicadas.
-
-    Raises:
-        ValueError: Si ``df`` no es un DataFrame válido o la estrategia de nulos
-            no es reconocida.
-    """
+    """Aplica limpieza funcional sin mutar el DataFrame original."""
     if not isinstance(df, pd.DataFrame):
         raise ValueError("El parámetro 'df' debe ser un pandas.DataFrame.")
 

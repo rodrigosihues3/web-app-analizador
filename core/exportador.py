@@ -51,8 +51,10 @@ def exportar_dataframe(df: pd.DataFrame, formato: str = "csv") -> io.BytesIO:
     try:
         if formato_norm == "csv":
             contenido_csv = df.to_csv(index=False)
+            # utf-8-sig añade BOM para que Excel en Windows muestre tildes y ñ sin errores
             buffer.write(contenido_csv.encode("utf-8-sig"))
         elif formato_norm in {"xlsx", "excel"}:
+            # ExcelWriter escribe el archivo .xlsx directamente en el buffer de memoria
             with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
                 df.to_excel(
                     writer, index=False, sheet_name="Datos_Procesados"

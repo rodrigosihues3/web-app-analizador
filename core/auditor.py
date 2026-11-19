@@ -6,8 +6,9 @@ from pathlib import Path
 from typing import Any
 import zipfile
 
-import numpy as np
 import pandas as pd
+
+from core.utils import calcular_limites_iqr, obtener_columnas_numericas
 
 
 class DatasetAuditor:
@@ -23,15 +24,7 @@ class DatasetAuditor:
         """Carga el archivo tabular desde disco y almacena ``self.df_raw``.
 
         Soporta archivos ``.csv`` (con respaldo automático ``utf-8`` ->
-        ``latin-1``) y ``.xlsx`` mediante bloques ``try / except`` específicos.
-
-        Args:
-            ruta_archivo: Ruta al archivo ``.csv`` o ``.xlsx`` a auditar.
-
-        Raises:
-            ValueError: Si la ruta es vacía o la extensión no está soportada.
-            FileNotFoundError: Si el archivo no existe en disco.
-            pd.errors.EmptyDataError: Si el archivo está vacío o sin datos.
+        ``latin-1`` y detección de separador ``;``) y ``.xlsx``.
         """
         if not ruta_archivo or not isinstance(ruta_archivo, str):
             raise ValueError("La ruta del archivo debe ser una cadena no vacía.")
@@ -57,12 +50,14 @@ class DatasetAuditor:
                 f"El archivo '{ruta.name}' no contiene columnas ni registros."
             )
 
+        # copy(deep=True) asegura que self.df_raw nunca se modifique por referencia
         self.df_raw: pd.DataFrame = df_cargado.copy(deep=True)
 
     @staticmethod
     def _leer_csv_con_delimitador(ruta: Path, encoding: str) -> pd.DataFrame:
         """Lee un CSV detectando automáticamente separadores ';' o tabulación."""
         df = pd.read_csv(ruta, encoding=encoding)
+        # Si quedó 1 sola columna con ';' o tabulación, relee detectando el separador
         if len(df.columns) == 1:
             encabezado = str(df.columns[0])
             if ";" in encabezado or "\t" in encabezado:
@@ -126,6 +121,7 @@ class DatasetAuditor:
         if serie_valida.empty:
             return "categorica"
 
+        # Verifica si al menos el 80% de la muestra de texto tiene formato de fecha
         if pd.api.types.is_object_dtype(serie) or pd.api.types.is_string_dtype(serie):
             muestra = serie_valida.astype(str).str.strip().head(50)
             tiene_separador_fecha = muestra.str.contains(
@@ -133,11 +129,11 @@ class DatasetAuditor:
             ).mean()
             if tiene_separador_fecha >= 0.8:
                 try:
+                    # format="mixed" y errors="coerce" convierten fechas válidas y dejan NaT en errores
                     parseadas = pd.to_datetime(
                         muestra, format="mixed", errors="coerce"
                     )
-                    tasa_exito = float(parseadas.notna().mean())
-                    if tasa_exito >= 0.8:
+                    if float(parseadas.notna().mean()) >= 0.8:
                         return "fecha"
                 except (ValueError, TypeError):
                     return "categorica"
@@ -145,47 +141,28 @@ class DatasetAuditor:
         return "categorica"
 
     def _calcular_outliers_iqr(self) -> dict[str, dict[str, Any]]:
-        """Calcula atípicos por columna numérica usando el criterio IQR."""
+        """Calcula valores atípicos por columna numérica usando la regla IQR."""
         outliers: dict[str, dict[str, Any]] = {}
 
-        columnas_numericas = [
-            col
-            for col in self.df_raw.columns
-            if pd.api.types.is_numeric_dtype(self.df_raw[col])
-            and not pd.api.types.is_bool_dtype(self.df_raw[col])
-        ]
-
-        for col in columnas_numericas:
+        for col in obtener_columnas_numericas(self.df_raw):
             try:
-                valores = self.df_raw[col].dropna().to_numpy(dtype=float)
-                if valores.size == 0:
-                    raise ValueError(
-                        f"Columna numérica '{col}' sin valores válidos."
-                    )
-
-                q1 = float(np.percentile(valores, 25))
-                q3 = float(np.percentile(valores, 75))
-                iqr = q3 - q1
-                limite_inferior = q1 - 1.5 * iqr
-                limite_superior = q3 + 1.5 * iqr
-
-                cantidad = int(
-                    np.sum(
-                        (valores < limite_inferior)
-                        | (valores > limite_superior)
-                    )
+                q1, q3, iqr, lim_inf, lim_sup = calcular_limites_iqr(
+                    self.df_raw[col]
                 )
+                valores = self.df_raw[col].dropna().astype(float)
+                # Filtro booleano de Pandas para contar registros fuera de límites
+                cantidad = int(((valores < lim_inf) | (valores > lim_sup)).sum())
 
-                outliers[str(col)] = {
+                outliers[col] = {
                     "cantidad": cantidad,
                     "q1": round(q1, 4),
                     "q3": round(q3, 4),
                     "iqr": round(iqr, 4),
-                    "limite_inferior": round(limite_inferior, 4),
-                    "limite_superior": round(limite_superior, 4),
+                    "limite_inferior": round(lim_inf, 4),
+                    "limite_superior": round(lim_sup, 4),
                 }
             except (ValueError, TypeError, IndexError):
-                outliers[str(col)] = {
+                outliers[col] = {
                     "cantidad": 0,
                     "q1": None,
                     "q3": None,
@@ -196,16 +173,15 @@ class DatasetAuditor:
 
         return outliers
 
-    def auditar_estructura(self) -> dict[str, Any]:
-        """Ejecuta una auditoría integral de estructura, nulos y atípicos.
+    def obtener_muestra(self, n: int = 3) -> list[dict[str, Any]]:
+        """Retorna las primeras ``n`` filas como lista de diccionarios."""
+        return self.df_raw.head(n).to_dict(orient="records")
 
-        Returns:
-            Diccionario con métricas dimensionales, esquema detallado por
-            columna, conteo de duplicados, columnas de varianza cero y
-            diagnóstico de valores atípicos mediante el rango intercuartílico.
-        """
+    def auditar_estructura(self) -> dict[str, Any]:
+        """Ejecuta una auditoría integral de estructura, nulos y atípicos."""
         filas = int(self.df_raw.shape[0])
         columnas = int(self.df_raw.shape[1])
+        # memory_usage(deep=True) mide el peso real en bytes incluyendo cadenas de texto
         memoria_kb = round(
             float(self.df_raw.memory_usage(deep=True).sum()) / 1024.0, 2
         )
@@ -214,10 +190,9 @@ class DatasetAuditor:
         for col in self.df_raw.columns:
             serie = self.df_raw[col]
             nulos = int(serie.isna().sum())
-            try:
-                porcentaje_nulos = round((nulos / filas) * 100.0, 2)
-            except ZeroDivisionError:
-                porcentaje_nulos = 0.0
+            porcentaje_nulos = (
+                round((nulos / filas) * 100.0, 2) if filas > 0 else 0.0
+            )
 
             esquema.append(
                 {
@@ -226,10 +201,12 @@ class DatasetAuditor:
                     "tipo_logico": self._inferir_tipo_logico(serie),
                     "nulos": nulos,
                     "porcentaje_nulos": porcentaje_nulos,
+                    # nunique(dropna=True) cuenta valores distintos ignorando NaN
                     "valores_unicos": int(serie.nunique(dropna=True)),
                 }
             )
 
+        # duplicated() marca con True las filas repetidas exactas
         duplicados = int(self.df_raw.duplicated().sum())
         columnas_varianza_cero = [
             str(col)

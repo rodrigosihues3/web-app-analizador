@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-import shutil
 from typing import Any
 import uuid
 
@@ -35,14 +34,9 @@ BASE_DIR: Path = Path(__file__).resolve().parent.parent
 WEB_DIR: Path = Path(__file__).resolve().parent
 STATIC_DIR: Path = WEB_DIR / "static"
 TEMPLATES_DIR: Path = WEB_DIR / "templates"
-DATASETS_DIR: Path = BASE_DIR / "datasets"
 TEMP_UPLOADS_DIR: Path = BASE_DIR / "temp_uploads"
 
 TEMP_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-
-DATASETS_DEMO_VALIDOS: frozenset[str] = frozenset(
-    {"notas_estudiantes.csv", "retail_sales.csv"}
-)
 
 # Almacén en memoria del estado por sesión activa
 SESIONES: dict[str, dict[str, Any]] = {}
@@ -136,10 +130,28 @@ def _renderizar_alerta_error(
     )
 
 
+def _eliminar_sesion(session_id: str | None) -> None:
+    """Elimina una sesión de memoria y borra su archivo temporal en disco."""
+    if not session_id:
+        return
+    id_limpio = session_id.strip()
+    sesion = SESIONES.pop(id_limpio, None)
+    if sesion and sesion.get("ruta_archivo"):
+        ruta_temp = Path(str(sesion["ruta_archivo"]))
+        if ruta_temp.exists():
+            try:
+                ruta_temp.unlink()
+            except OSError as exc:
+                logger.warning(
+                    "No se pudo eliminar archivo temporal '%s': %s",
+                    ruta_temp,
+                    exc,
+                )
+
+
 async def _materializar_archivo_sesion(
     session_id: str,
     archivo: UploadFile | None,
-    dataset_demo: str | None,
 ) -> tuple[Path, str]:
     """Almacena el archivo subido hacia ``temp_uploads/`` validando contenido."""
     TEMP_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -154,21 +166,6 @@ async def _materializar_archivo_sesion(
         ruta_destino = TEMP_UPLOADS_DIR / f"{session_id}_{nombre_original}"
         ruta_destino.write_bytes(contenido)
         return ruta_destino, nombre_original
-
-    if dataset_demo is not None and dataset_demo.strip():
-        nombre_demo = Path(dataset_demo.strip()).name
-        if nombre_demo not in DATASETS_DEMO_VALIDOS:
-            raise ValueError(
-                f"El archivo de referencia '{nombre_demo}' no está disponible."
-            )
-        ruta_origen = DATASETS_DIR / nombre_demo
-        if not ruta_origen.exists():
-            raise FileNotFoundError(
-                f"No se encontró el archivo '{nombre_demo}' en el servidor."
-            )
-        ruta_destino = TEMP_UPLOADS_DIR / f"{session_id}_{nombre_demo}"
-        shutil.copyfile(ruta_origen, ruta_destino)
-        return ruta_destino, nombre_demo
 
     raise ValueError(
         "Adjunta un archivo tabular en formato .csv o .xlsx para iniciar el análisis."
@@ -199,7 +196,7 @@ async def pagina_inicio(request: Request) -> HTMLResponse:
 async def cargar_y_auditar_dataset(
     request: Request,
     archivo: UploadFile | None = File(default=None),
-    dataset_demo: str | None = Form(default=None),
+    session_anterior: str | None = Form(default=None, alias="session_id"),
 ) -> HTMLResponse:
     """Ingesta un archivo tabular, audita su estructura y genera síntesis inicial."""
     session_id = str(uuid.uuid4())
@@ -209,13 +206,15 @@ async def cargar_y_auditar_dataset(
         ruta_guardada, nombre_original = await _materializar_archivo_sesion(
             session_id=session_id,
             archivo=archivo,
-            dataset_demo=dataset_demo,
         )
 
         auditor = DatasetAuditor(str(ruta_guardada))
         auditoria = auditor.auditar_estructura()
-        muestra_filas = auditor.df_raw.head(3).to_dict(orient="records")
+        muestra_filas = auditor.obtener_muestra(3)
         contexto_ia = generar_contexto_ejecutivo(auditoria, muestra_filas)
+
+        # Limpia la sesión anterior solo cuando el nuevo archivo se validó bien
+        _eliminar_sesion(session_anterior)
 
         (
             cols_categoricas,
@@ -304,20 +303,7 @@ async def restaurar_estado_inicial(
     session_id: str | None = Form(default=None),
 ) -> HTMLResponse:
     """Limpia la sesión activa y su archivo temporal, restaurando el inicio."""
-    if session_id:
-        id_limpio = session_id.strip()
-        sesion = SESIONES.pop(id_limpio, None)
-        if sesion and sesion.get("ruta_archivo"):
-            ruta_temp = Path(str(sesion["ruta_archivo"]))
-            if ruta_temp.exists():
-                try:
-                    ruta_temp.unlink()
-                except OSError as exc:
-                    logger.warning(
-                        "No se pudo eliminar archivo temporal '%s': %s",
-                        ruta_temp,
-                        exc,
-                    )
+    _eliminar_sesion(session_id)
 
     return templates.TemplateResponse(
         request=request,
@@ -373,7 +359,6 @@ async def procesar_pipeline_analitico(
     recortar_outliers: str | None = Form(default=None),
     col_categoria: str | None = Form(default=None),
     col_numerica: str | None = Form(default=None),
-    col_metrica: str | None = Form(default=None),
 ) -> HTMLResponse:
     """Ejecuta limpieza funcional, estadística descriptiva y gráficos Plotly."""
     try:
@@ -391,15 +376,10 @@ async def procesar_pipeline_analitico(
         estrategia_norm = estrategia_nulos.strip().lower() or "mediana"
 
         columna_cat = (
-            col_categoria
-            or sesion.get("col_categoria_default")
-            or ""
+            col_categoria or sesion.get("col_categoria_default") or ""
         ).strip()
         columna_num = (
-            col_numerica
-            or col_metrica
-            or sesion.get("col_numerica_default")
-            or ""
+            col_numerica or sesion.get("col_numerica_default") or ""
         ).strip()
 
         if not columna_num:

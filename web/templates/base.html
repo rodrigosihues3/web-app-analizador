@@ -105,6 +105,7 @@
             <form
                 id="form-carga-modal"
                 hx-post="/analizar/cargar"
+                hx-include="#session-actual"
                 hx-target="#workspace"
                 hx-encoding="multipart/form-data"
                 hx-sync="this:drop"
@@ -196,9 +197,7 @@
             var modal = document.getElementById("modal-carga");
             var modalDropzone = document.getElementById("modal-dropzone");
             var modalInput = document.getElementById("input-archivo-modal");
-            var modalFileNameEl = document.getElementById("modal-archivo-nombre");
             var modalErrorEl = document.getElementById("modal-error-archivo");
-            var modalSubmitBtn = document.getElementById("btn-analizar-modal");
             var modalForm = document.getElementById("form-carga-modal");
             var dragDepth = 0;
 

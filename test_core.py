@@ -249,7 +249,8 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
         """Valida respaldo local ante ausencia de clave y ante fallo/timeout."""
         auditor = DatasetAuditor(str(RUTA_NOTAS))
         auditoria = auditor.auditar_estructura()
-        muestra = auditor.df_raw.head(3).to_dict(orient="records")
+        muestra = auditor.obtener_muestra(3)
+        self.assertEqual(len(muestra), 3)
 
         with patch.dict(os.environ, {"GEMINI_API_KEY": ""}, clear=False):
             ctx_sin_key = generar_contexto_ejecutivo(auditoria, muestra)

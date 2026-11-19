@@ -204,8 +204,7 @@ summary:focus-visible {
     transform: none;
 }
 
-.btn-primary.hidden,
-.btn-secondary.hidden {
+.btn-primary.hidden {
     display: none;
 }
 
