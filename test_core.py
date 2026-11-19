@@ -351,7 +351,7 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
                     ruta_pdf_prueba.unlink()
 
     def test_herramientas_mcp(self) -> None:
-        """Verifica las 3 herramientas MCP y la creación temporal de PDF vía MCP."""
+        """Verifica las 2 herramientas MCP interactivas y exportación CSV/PDF."""
         import asyncio
 
         herramientas = asyncio.run(mcp_server.mcp.list_tools())
@@ -360,8 +360,7 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
             nombres_tools,
             {
                 "auditar_dataset_mcp",
-                "metricas_clave_mcp",
-                "exportar_reporte_pdf_mcp",
+                "procesar_y_exportar_mcp",
             },
         )
 
@@ -369,26 +368,32 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
         self.assertEqual(aud_json["filas"], 25)
         self.assertEqual(aud_json["duplicados"], 1)
 
-        met_json = json.loads(
-            mcp_server.metricas_clave_mcp(
-                str(RUTA_RETAIL), "Categoria", "Total_Venta"
-            )
-        )
-        self.assertIn("resumen_descriptivo", met_json)
-        self.assertIn("valores_clave", met_json)
-
-        ruta_mcp_pdf = BASE_DIR / "test_mcp_output.pdf"
-        try:
+        with tempfile.TemporaryDirectory() as tmp_dir:
             with patch.dict(os.environ, {"GEMINI_API_KEY": ""}, clear=False):
-                mensaje = mcp_server.exportar_reporte_pdf_mcp(
-                    str(RUTA_RETAIL), str(ruta_mcp_pdf)
+                resp_str = mcp_server.procesar_y_exportar_mcp(
+                    ruta_archivo=str(RUTA_RETAIL),
+                    carpeta_salida=tmp_dir,
+                    eliminar_duplicados=True,
+                    estrategia_nulos="mediana",
+                    recortar_outliers=True,
+                    col_categoria="Categoria",
+                    col_metrica="Total_Venta",
                 )
-            self.assertIn("reporte pdf", mensaje.lower())
-            self.assertTrue(ruta_mcp_pdf.exists())
-            self.assertGreater(ruta_mcp_pdf.stat().st_size, 10240)
-        finally:
-            if ruta_mcp_pdf.exists():
-                ruta_mcp_pdf.unlink()
+
+            resultado = json.loads(resp_str)
+            self.assertNotIn("error", resultado)
+            self.assertIn("ruta_csv_limpio", resultado)
+            self.assertIn("ruta_reporte_pdf", resultado)
+            self.assertIn("logs_limpieza", resultado)
+            self.assertIn("estadisticas", resultado)
+            self.assertIn("valores_clave", resultado)
+
+            ruta_csv = Path(resultado["ruta_csv_limpio"])
+            ruta_pdf = Path(resultado["ruta_reporte_pdf"])
+            self.assertTrue(ruta_csv.exists())
+            self.assertTrue(ruta_pdf.exists())
+            self.assertGreater(ruta_pdf.stat().st_size, 10240)
+            self.assertTrue(ruta_pdf.read_bytes().startswith(b"%PDF"))
 
 
 if __name__ == "__main__":

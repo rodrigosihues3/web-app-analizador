@@ -16,12 +16,12 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel
 
-load_dotenv(override=False)
-
+load_dotenv(override=True)
+os.environ.pop("GOOGLE_API_KEY", None)
 logger = logging.getLogger(__name__)
 
 MODELO_GEMINI = "gemini-2.5-flash"
-TIMEOUT_SEGUNDOS = 4.0
+TIMEOUT_SEGUNDOS = 10.0
 # La API de Google GenAI exige un deadline de servidor >= 10s (10000 ms);
 # el corte estricto de 4.0s se mantiene en Python via ThreadPoolExecutor.
 TIMEOUT_MILISEGUNDOS = 10000
@@ -73,8 +73,14 @@ def _generar_respaldo_determinista(
         if isinstance(info, dict)
     )
 
-    muestra_num = ", ".join(cols_numericas[:3]) if cols_numericas else "sin métricas numéricas"
-    muestra_dim = ", ".join(cols_dimension[:3]) if cols_dimension else "sin dimensiones categóricas"
+    muestra_num = (
+        ", ".join(cols_numericas[:3]) if cols_numericas else "sin métricas numéricas"
+    )
+    muestra_dim = (
+        ", ".join(cols_dimension[:3])
+        if cols_dimension
+        else "sin dimensiones categóricas"
+    )
 
     titulo_reporte = "Diagnóstico Estructural y Variables del Conjunto de Datos"
 
@@ -307,9 +313,7 @@ def _generar_explicacion_grafico_local(
     var_b = str(mayor.get("var_b", ""))
     coef = float(mayor.get("coeficiente", 0.0))
     intensidad = (
-        "fuerte"
-        if abs(coef) >= 0.7
-        else ("moderada" if abs(coef) >= 0.4 else "débil")
+        "fuerte" if abs(coef) >= 0.7 else ("moderada" if abs(coef) >= 0.4 else "débil")
     )
     sentido = "positiva" if coef >= 0 else "negativa"
     return (
@@ -374,9 +378,7 @@ def explicar_grafico_ia(
     if not api_key or api_key == "tu_api_key_aqui":
         return _generar_explicacion_grafico_local(tipo_grafico, datos_grafico)
 
-    titulo_reporte = str(
-        contexto_dataset.get("titulo_reporte", "Análisis de Dataset")
-    )
+    titulo_reporte = str(contexto_dataset.get("titulo_reporte", "Análisis de Dataset"))
     # ThreadPoolExecutor ejecuta la llamada en segundo plano para cortar a los 4.0s exactos
     executor = ThreadPoolExecutor(max_workers=1)
     try:
@@ -389,9 +391,7 @@ def explicar_grafico_ia(
         )
         return futuro.result(timeout=TIMEOUT_SEGUNDOS)
     except Exception as exc:
-        logger.warning(
-            "Respaldo local al explicar gráfico (%s): %s", tipo_grafico, exc
-        )
+        logger.warning("Respaldo local al explicar gráfico (%s): %s", tipo_grafico, exc)
         return _generar_explicacion_grafico_local(tipo_grafico, datos_grafico)
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
