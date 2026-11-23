@@ -33,9 +33,7 @@ def _detectar_columnas(
         if col.get("tipo_logico") in {"categorica", "fecha"}
     ]
     nums = [
-        str(col["columna"])
-        for col in esquema
-        if col.get("tipo_logico") == "numerica"
+        str(col["columna"]) for col in esquema if col.get("tipo_logico") == "numerica"
     ]
     nums_utiles = [c for c in nums if c not in constantes] or nums
 
@@ -128,14 +126,15 @@ def main() -> int:
 
         total_nulos = sum(int(c["nulos"]) for c in auditoria["esquema"])
         total_outliers = sum(
-            int(info["cantidad"])
-            for info in auditoria.get("outliers_iqr", {}).values()
+            int(info["cantidad"]) for info in auditoria.get("outliers_iqr", {}).values()
         )
         var_cero = auditoria.get("columnas_varianza_cero", [])
 
         print("\n=== 1. DIAGNOSTICO DE AUDITORIA INICIAL ===")
         print(f"  Archivo       : {Path(args.archivo).name}")
-        print(f"  Dimensiones   : {auditoria['filas']} filas x {auditoria['columnas']} columnas")
+        print(
+            f"  Dimensiones   : {auditoria['filas']} filas x {auditoria['columnas']} columnas"
+        )
         print(f"  Memoria RAM   : {auditoria['memoria_kb']:.2f} KB")
         print(f"  Valores nulos : {total_nulos}")
         print(f"  Duplicados    : {auditoria['duplicados']}")
@@ -146,7 +145,6 @@ def main() -> int:
             auditor.df_raw,
             eliminar_duplicados=args.sin_duplicados,
             estrategia_nulos=args.nulos,
-            recortar_outliers=args.recortar_extremos,
         )
 
         print("\n=== 2. BITACORA DE LIMPIEZA APLICADA ===")
@@ -170,9 +168,7 @@ def main() -> int:
             except (KeyError, ValueError, ZeroDivisionError):
                 valores_clave = None
 
-        contexto = generar_contexto_ejecutivo(
-            auditoria, auditor.obtener_muestra(3)
-        )
+        contexto = generar_contexto_ejecutivo(auditoria, auditor.obtener_muestra(3))
         imagenes = generar_graficos_estaticos_pdf(df_limpio)
 
         directorio = Path(args.salida)
@@ -180,9 +176,7 @@ def main() -> int:
         nombre_base = Path(args.archivo).stem
 
         ruta_csv = directorio / f"{nombre_base}_limpio.csv"
-        ruta_csv.write_bytes(
-            exportar_dataframe(df_limpio, formato="csv").getvalue()
-        )
+        ruta_csv.write_bytes(exportar_dataframe(df_limpio, formato="csv").getvalue())
 
         ruta_pdf = directorio / f"{nombre_base}_reporte.pdf"
         pdf_buf = generar_reporte_pdf(

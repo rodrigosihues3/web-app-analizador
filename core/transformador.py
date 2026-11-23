@@ -97,9 +97,7 @@ def _tratar_nulos(
             return df_nuevo, logs
 
         df_filtrado = df_nuevo.dropna().reset_index(drop=True)
-        logs.append(
-            f"Eliminadas {filas_con_nulos} fila(s) con datos faltantes."
-        )
+        logs.append(f"Eliminadas {filas_con_nulos} fila(s) con datos faltantes.")
         return df_filtrado, logs
 
     columnas_con_nulos = [
@@ -114,17 +112,11 @@ def _tratar_nulos(
         n_nulos = int(serie.isna().sum())
 
         if es_columna_numerica(serie):
-            valor = _calcular_valor_imputacion_numerica(
-                serie, estrategia, valor_nulos
-            )
+            valor = _calcular_valor_imputacion_numerica(serie, estrategia, valor_nulos)
             if pd.api.types.is_integer_dtype(serie) and not float(valor).is_integer():
                 df_nuevo[col] = serie.astype("float64").fillna(valor)
             else:
-                relleno = (
-                    int(valor)
-                    if pd.api.types.is_integer_dtype(serie)
-                    else valor
-                )
+                relleno = int(valor) if pd.api.types.is_integer_dtype(serie) else valor
                 df_nuevo[col] = serie.fillna(relleno)
 
             etiqueta = (

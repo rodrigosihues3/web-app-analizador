@@ -1,10 +1,4 @@
-"""Capa de dominio analítico del Analizador Multiparadigma de Datos.
-
-Este paquete implementa la lógica pura del sistema sin dependencias de
-frameworks web, combinando Programación Orientada a Objetos (auditoría de
-estado estructural) y Programación Funcional (transformación y estadística
-inmutables).
-"""
+"""Lógica del sistema sin dependencias de frameworks web"""
 
 from core.auditor import DatasetAuditor
 from core.estadistica import (

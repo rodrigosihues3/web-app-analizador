@@ -488,14 +488,17 @@ input[type="checkbox"] {
     background-color: var(--accent-soft);
 }
 
-.tooltip-popover {
-    position: absolute;
-    left: 50%;
-    bottom: calc(100% + 8px);
-    transform: translateX(-50%) scale(0.96);
-    transform-origin: bottom center;
-    z-index: 30;
+.tooltip-wrapper .tooltip-popover {
+    display: none;
+}
+
+#global-tooltip-popover {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 80;
     width: 16rem;
+    max-width: calc(100vw - 24px);
     padding: 0.65rem 0.75rem;
     background-color: var(--surface);
     color: var(--text-secondary);
@@ -508,53 +511,16 @@ input[type="checkbox"] {
     text-align: left;
     white-space: normal;
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
-    transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out);
+    transform: scale(0.96);
+    transition: opacity 140ms var(--ease-out), transform 140ms var(--ease-out), visibility 140ms;
 }
 
-.tooltip-wrapper:hover .tooltip-popover,
-.tooltip-wrapper.is-open .tooltip-popover {
+#global-tooltip-popover.is-visible {
     opacity: 1;
-    pointer-events: auto;
-    transform: translateX(-50%) scale(1);
-}
-
-.tooltip-popover.align-right {
-    left: auto;
-    right: 0;
-    transform: scale(0.96);
-    transform-origin: bottom right;
-}
-
-.tooltip-wrapper:hover .tooltip-popover.align-right,
-.tooltip-wrapper.is-open .tooltip-popover.align-right {
+    visibility: visible;
     transform: scale(1);
-}
-
-.tooltip-popover.align-left {
-    left: 0;
-    right: auto;
-    transform: scale(0.96);
-    transform-origin: bottom left;
-}
-
-.tooltip-wrapper:hover .tooltip-popover.align-left,
-.tooltip-wrapper.is-open .tooltip-popover.align-left {
-    transform: scale(1);
-}
-
-.tooltip-popover.place-bottom {
-    bottom: auto;
-    top: calc(100% + 8px);
-    transform-origin: top center;
-}
-
-.tooltip-popover.place-bottom.align-right {
-    transform-origin: top right;
-}
-
-.tooltip-popover.place-bottom.align-left {
-    transform-origin: top left;
 }
 
 /* Indicadores HTMX */

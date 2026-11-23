@@ -81,22 +81,18 @@
 
             <div>
                 <div class="flex items-center gap-1 text-xs text-muted">
-                    <span>Varianza cero</span>
+                    <span>Tiempo de análisis</span>
                     <span class="tooltip-wrapper">
-                        <button type="button" class="tooltip-trigger" aria-label="Qué significa Varianza cero">
+                        <button type="button" class="tooltip-trigger" aria-label="Qué significa Tiempo de análisis">
                             {{ lucide_icon("help-circle", "w-3.5 h-3.5") }}
                         </button>
                         <span class="tooltip-popover align-right" role="tooltip">
-                            Detecta columnas constantes cuyo valor nunca cambia y no aportan información estadística.
+                            Tiempo total que tomó cargar, auditar la estructura y consultar el resumen inicial del archivo.
                         </span>
                     </span>
                 </div>
-                <div class="text-sm font-medium font-mono text-primary truncate mt-1.5" title="{{ auditoria.columnas_varianza_cero | join(', ') }}">
-                    {% if auditoria.columnas_varianza_cero %}
-                        {{ auditoria.columnas_varianza_cero | join(", ") }}
-                    {% else %}
-                        Ninguna
-                    {% endif %}
+                <div class="text-lg font-semibold font-mono text-primary tabular-nums mt-0.5">
+                    {{ "%.2f"|format(tiempo_analisis_s) }} s
                 </div>
             </div>
         </div>
@@ -192,9 +188,9 @@
                 >
                     <input type="hidden" name="session_id" value="{{ session_id }}">
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div class="space-y-2">
-                            <div class="flex items-center gap-1 mb-1.5">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+                        <div>
+                            <div class="h-5 flex items-center gap-1 mb-1.5">
                                 <label for="select-estrategia-nulos" class="text-xs font-medium text-secondary">
                                     Valores nulos
                                 </label>
@@ -221,7 +217,7 @@
                                 <option value="ninguna">Conservar sin cambios</option>
                             </select>
 
-                            <div id="bloque-valor-manual" class="hidden pt-1">
+                            <div id="bloque-valor-manual" class="hidden mt-2">
                                 <label for="input-valor-nulos" class="block text-xs text-muted mb-1">
                                     Valor de reemplazo (ej. 0):
                                 </label>
@@ -237,9 +233,11 @@
                         </div>
 
                         <div>
-                            <label for="select-col-categoria" class="block text-xs font-medium text-secondary mb-1.5">
-                                Agrupar por (categoría)
-                            </label>
+                            <div class="h-5 flex items-center mb-1.5">
+                                <label for="select-col-categoria" class="text-xs font-medium text-secondary">
+                                    Agrupar por (categoría)
+                                </label>
+                            </div>
                             <select id="select-col-categoria" name="col_categoria" class="form-control w-full px-3 py-2 text-xs">
                                 {% for col_cat in columnas_categoricas %}
                                 <option value="{{ col_cat }}" {% if col_cat == col_categoria_default %}selected{% endif %}>
@@ -250,9 +248,11 @@
                         </div>
 
                         <div>
-                            <label for="select-col-numerica" class="block text-xs font-medium text-secondary mb-1.5">
-                                Métrica principal (numérica)
-                            </label>
+                            <div class="h-5 flex items-center mb-1.5">
+                                <label for="select-col-numerica" class="text-xs font-medium text-secondary">
+                                    Métrica principal (numérica)
+                                </label>
+                            </div>
                             <select id="select-col-numerica" name="col_numerica" class="form-control w-full px-3 py-2 text-xs">
                                 {% for col_num in columnas_numericas %}
                                 <option value="{{ col_num }}" {% if col_num == col_numerica_default %}selected{% endif %}>

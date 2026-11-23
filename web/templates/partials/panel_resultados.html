@@ -52,40 +52,8 @@
         </details>
     </section>
 
-    <!-- 2. Indicadores KPI de Media, Mediana y Moda + Valores Clave por Categoría -->
+    <!-- 2. Indicadores de Valores Clave por Categoría -->
     {% if valores_clave %}
-    <section class="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-enter delay-1">
-        <div class="surface-card p-4 flex flex-col justify-between gap-1">
-            <div class="text-xs text-muted">Media ({{ valores_clave.col_metrica }})</div>
-            <div class="text-xl leading-7 font-semibold font-mono text-accent tabular-nums">
-                {{ "%.2f"|format(valores_clave.media_metrica) }}
-            </div>
-            <div class="text-xs text-secondary">
-                Promedio aritmético de la métrica elegida
-            </div>
-        </div>
-
-        <div class="surface-card p-4 flex flex-col justify-between gap-1">
-            <div class="text-xs text-muted">Mediana ({{ valores_clave.col_metrica }})</div>
-            <div class="text-xl leading-7 font-semibold font-mono text-primary tabular-nums">
-                {{ "%.2f"|format(valores_clave.mediana_metrica) }}
-            </div>
-            <div class="text-xs text-secondary">
-                Valor central de los datos ordenados
-            </div>
-        </div>
-
-        <div class="surface-card p-4 flex flex-col justify-between gap-1">
-            <div class="text-xs text-muted">Moda ({{ valores_clave.col_metrica }})</div>
-            <div class="text-xl leading-7 font-semibold font-mono text-primary tabular-nums">
-                {{ "%.2f"|format(valores_clave.moda_metrica) }}
-            </div>
-            <div class="text-xs text-secondary">
-                Valor que más veces se repite
-            </div>
-        </div>
-    </section>
-
     <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-enter delay-1">
         <div class="surface-card p-4 flex flex-col justify-between gap-1.5">
             <div class="text-xs text-muted">Registro máximo global</div>
@@ -118,7 +86,17 @@
         </div>
 
         <div class="surface-card p-4 flex flex-col justify-between gap-1.5">
-            <div class="text-xs text-muted">Categoría líder en acumulado</div>
+            <div class="flex items-center gap-1 text-xs text-muted">
+                <span>Categoría líder en acumulado</span>
+                <span class="tooltip-wrapper">
+                    <button type="button" class="tooltip-trigger" aria-label="Qué es Categoría líder en acumulado">
+                        {{ lucide_icon("help-circle", "w-3.5 h-3.5") }}
+                    </button>
+                    <span class="tooltip-popover" role="tooltip">
+                        Suma total de la métrica agrupada por categoría. Es ideal para ventas o cantidades; en notas refleja la suma de todos los registros con ese mismo nombre o grupo.
+                    </span>
+                </span>
+            </div>
             <div class="text-lg leading-7 font-semibold text-primary truncate">
                 {{ valores_clave.categoria_lider_acumulado.categoria }}
             </div>
@@ -148,15 +126,51 @@
                                     <button type="button" class="tooltip-trigger" aria-label="Qué es N">
                                         {{ lucide_icon("help-circle", "w-3 h-3") }}
                                     </button>
-                                    <span class="tooltip-popover place-bottom" role="tooltip">
+                                    <span class="tooltip-popover" role="tooltip">
                                         Cantidad total de registros válidos analizados en esta columna.
                                     </span>
                                 </span>
                             </span>
                         </th>
-                        <th class="text-right">Media</th>
-                        <th class="text-right">Mediana</th>
-                        <th class="text-right">Moda</th>
+                        <th class="text-right">
+                            <span class="inline-flex items-center justify-end gap-1">
+                                <span>Media</span>
+                                <span class="tooltip-wrapper">
+                                    <button type="button" class="tooltip-trigger" aria-label="Qué es Media">
+                                        {{ lucide_icon("help-circle", "w-3 h-3") }}
+                                    </button>
+                                    <span class="tooltip-popover" role="tooltip">
+                                        Promedio aritmético: suma de todos los valores dividida entre la cantidad de registros (N).
+                                    </span>
+                                </span>
+                            </span>
+                        </th>
+                        <th class="text-right">
+                            <span class="inline-flex items-center justify-end gap-1">
+                                <span>Mediana</span>
+                                <span class="tooltip-wrapper">
+                                    <button type="button" class="tooltip-trigger" aria-label="Qué es Mediana">
+                                        {{ lucide_icon("help-circle", "w-3 h-3") }}
+                                    </button>
+                                    <span class="tooltip-popover" role="tooltip">
+                                        Valor que queda exactamente en el centro al ordenar todos los datos de menor a mayor.
+                                    </span>
+                                </span>
+                            </span>
+                        </th>
+                        <th class="text-right">
+                            <span class="inline-flex items-center justify-end gap-1">
+                                <span>Moda</span>
+                                <span class="tooltip-wrapper">
+                                    <button type="button" class="tooltip-trigger" aria-label="Qué es Moda">
+                                        {{ lucide_icon("help-circle", "w-3 h-3") }}
+                                    </button>
+                                    <span class="tooltip-popover" role="tooltip">
+                                        Valor que se repite con mayor frecuencia dentro de la columna.
+                                    </span>
+                                </span>
+                            </span>
+                        </th>
                         <th class="text-right">
                             <span class="inline-flex items-center justify-end gap-1">
                                 <span>Desv. Est.</span>
@@ -164,7 +178,7 @@
                                     <button type="button" class="tooltip-trigger" aria-label="Qué es Desviación Estándar">
                                         {{ lucide_icon("help-circle", "w-3 h-3") }}
                                     </button>
-                                    <span class="tooltip-popover place-bottom" role="tooltip">
+                                    <span class="tooltip-popover" role="tooltip">
                                         Mide qué tan dispersos están los datos respecto al promedio. Valores altos indican mayor variabilidad.
                                     </span>
                                 </span>
@@ -172,45 +186,6 @@
                         </th>
                         <th class="text-right">Mín</th>
                         <th class="text-right">Máx</th>
-                        <th class="text-right">
-                            <span class="inline-flex items-center justify-end gap-1">
-                                <span>Q25</span>
-                                <span class="tooltip-wrapper">
-                                    <button type="button" class="tooltip-trigger" aria-label="Qué es Q25">
-                                        {{ lucide_icon("help-circle", "w-3 h-3") }}
-                                    </button>
-                                    <span class="tooltip-popover place-bottom" role="tooltip">
-                                        Primer cuartil (percentil 25): el 25% de los datos está por debajo de este valor.
-                                    </span>
-                                </span>
-                            </span>
-                        </th>
-                        <th class="text-right">
-                            <span class="inline-flex items-center justify-end gap-1">
-                                <span>Q75</span>
-                                <span class="tooltip-wrapper">
-                                    <button type="button" class="tooltip-trigger" aria-label="Qué es Q75">
-                                        {{ lucide_icon("help-circle", "w-3 h-3") }}
-                                    </button>
-                                    <span class="tooltip-popover place-bottom" role="tooltip">
-                                        Tercer cuartil (percentil 75): el 75% de los datos está por debajo de este valor.
-                                    </span>
-                                </span>
-                            </span>
-                        </th>
-                        <th class="text-right">
-                            <span class="inline-flex items-center justify-end gap-1">
-                                <span>Asimetría</span>
-                                <span class="tooltip-wrapper">
-                                    <button type="button" class="tooltip-trigger" aria-label="Qué es Asimetría">
-                                        {{ lucide_icon("help-circle", "w-3 h-3") }}
-                                    </button>
-                                    <span class="tooltip-popover place-bottom align-right" role="tooltip">
-                                        Indica la inclinación de la distribución: cercano a 0 es simétrica; positivo indica cola hacia valores altos y negativo hacia valores bajos.
-                                    </span>
-                                </span>
-                            </span>
-                        </th>
                     </tr>
                 </thead>
                 <tbody>
@@ -224,9 +199,6 @@
                         <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.desviacion_estandar) }}</td>
                         <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.minimo) }}</td>
                         <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.maximo) }}</td>
-                        <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.q25) }}</td>
-                        <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.q75) }}</td>
-                        <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.asimetria) }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

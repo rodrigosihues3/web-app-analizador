@@ -1,4 +1,4 @@
-"""Módulo de auditoría estructural de datasets (Enfoque POO)."""
+"""Auditoría de datasets"""
 
 from pathlib import Path
 from typing import Any
@@ -8,8 +8,6 @@ import pandas as pd
 
 
 class DatasetAuditor:
-    """Audita la estructura y calidad de un archivo CSV o Excel."""
-
     EXTENSIONES_SOPORTADAS = (".csv", ".xlsx")
 
     def __init__(self, ruta_archivo: str) -> None:
@@ -46,9 +44,7 @@ class DatasetAuditor:
         if len(df.columns) == 1:
             encabezado = str(df.columns[0])
             if ";" in encabezado or "\t" in encabezado:
-                return pd.read_csv(
-                    ruta, encoding=encoding, sep=None, engine="python"
-                )
+                return pd.read_csv(ruta, encoding=encoding, sep=None, engine="python")
         return df
 
     def _cargar_archivo(self, ruta: Path, extension: str) -> pd.DataFrame:
@@ -107,9 +103,7 @@ class DatasetAuditor:
             primer_valor = muestra.iloc[0]
             if "-" in primer_valor or "/" in primer_valor:
                 try:
-                    parseadas = pd.to_datetime(
-                        muestra, format="mixed", errors="coerce"
-                    )
+                    parseadas = pd.to_datetime(muestra, format="mixed", errors="coerce")
                     if float(parseadas.notna().mean()) >= 0.8:
                         return "fecha"
                 except (ValueError, TypeError):
@@ -125,17 +119,13 @@ class DatasetAuditor:
         """Retorna el diagnóstico de filas, columnas, nulos y duplicados."""
         filas = int(self.df_raw.shape[0])
         columnas = int(self.df_raw.shape[1])
-        memoria_kb = round(
-            float(self.df_raw.memory_usage(deep=True).sum()) / 1024.0, 2
-        )
+        memoria_kb = round(float(self.df_raw.memory_usage(deep=True).sum()) / 1024.0, 2)
 
         esquema: list[dict[str, Any]] = []
         for col in self.df_raw.columns:
             serie = self.df_raw[col]
             nulos = int(serie.isna().sum())
-            porcentaje_nulos = (
-                round((nulos / filas) * 100.0, 2) if filas > 0 else 0.0
-            )
+            porcentaje_nulos = round((nulos / filas) * 100.0, 2) if filas > 0 else 0.0
 
             esquema.append(
                 {

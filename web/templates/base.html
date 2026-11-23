@@ -19,7 +19,7 @@
         })();
     </script>
     <link rel="stylesheet" href="/static/css/tailwind.min.css">
-    <link rel="stylesheet" href="/static/css/app.css">
+    <link rel="stylesheet" href="/static/css/app.css?v=3">
     <script src="/static/js/plotly.min.js"></script>
     <script src="/static/js/htmx.min.js"></script>
 </head>
@@ -534,9 +534,7 @@
             document.addEventListener("keydown", function (evt) {
                 if (evt.key === "Escape") {
                     window.closeUploadModal();
-                    document.querySelectorAll(".tooltip-wrapper.is-open").forEach(function (w) {
-                        w.classList.remove("is-open");
-                    });
+                    if (window.hideGlobalTooltip) window.hideGlobalTooltip();
                 }
             });
 
@@ -612,44 +610,93 @@
                 }
             });
 
-            /* Posicionamiento inteligente de tooltips ? para evitar recortes en bordes */
-            function adjustTooltipPosition(wrapper) {
-                var popover = wrapper.querySelector(".tooltip-popover");
-                if (!popover) return;
-                popover.classList.remove("align-left", "align-right", "place-bottom");
-                var rect = popover.getBoundingClientRect();
-                if (rect.right > window.innerWidth - 12) {
-                    popover.classList.add("align-right");
-                } else if (rect.left < 12) {
-                    popover.classList.add("align-left");
+            /* Portal global de tooltips ? directo en <body> para evitar desfases por transform o overflow */
+            var globalTooltip = document.createElement("div");
+            globalTooltip.id = "global-tooltip-popover";
+            globalTooltip.setAttribute("role", "tooltip");
+            document.body.appendChild(globalTooltip);
+
+            var pinnedTrigger = null;
+
+            function showTooltipFor(trigger) {
+                var wrapper = trigger.closest(".tooltip-wrapper");
+                var source = wrapper ? wrapper.querySelector(".tooltip-popover") : null;
+                if (!source) return;
+
+                var texto = (source.textContent || "").trim();
+                if (!texto) return;
+
+                globalTooltip.textContent = texto;
+                globalTooltip.style.left = "-9999px";
+                globalTooltip.style.top = "-9999px";
+                globalTooltip.classList.add("is-visible");
+
+                var tRect = trigger.getBoundingClientRect();
+                var popWidth = globalTooltip.offsetWidth || 256;
+                var popHeight = globalTooltip.offsetHeight || 60;
+                var margin = 12;
+
+                var left = tRect.left + (tRect.width / 2) - (popWidth / 2);
+                if (left + popWidth > window.innerWidth - margin) {
+                    left = window.innerWidth - popWidth - margin;
                 }
-                if (rect.top < 64) {
-                    popover.classList.add("place-bottom");
+                if (left < margin) {
+                    left = margin;
                 }
+
+                var top = tRect.top - popHeight - 8;
+                if (top < 64) {
+                    top = tRect.bottom + 8;
+                }
+                if (top + popHeight > window.innerHeight - margin) {
+                    top = Math.max(margin, window.innerHeight - popHeight - margin);
+                }
+
+                globalTooltip.style.left = Math.round(left) + "px";
+                globalTooltip.style.top = Math.round(top) + "px";
             }
 
-            document.addEventListener("mouseenter", function (evt) {
-                var wrapper = evt.target && evt.target.closest ? evt.target.closest(".tooltip-wrapper") : null;
-                if (wrapper) adjustTooltipPosition(wrapper);
-            }, true);
+            window.hideGlobalTooltip = function () {
+                pinnedTrigger = null;
+                globalTooltip.classList.remove("is-visible");
+            };
 
-            document.addEventListener("click", function (evt) {
-                var trigger = evt.target.closest ? evt.target.closest(".tooltip-trigger") : null;
-                document.querySelectorAll(".tooltip-wrapper.is-open").forEach(function (w) {
-                    if (!trigger || !w.contains(trigger)) {
-                        w.classList.remove("is-open");
-                    }
-                });
+            document.addEventListener("mouseover", function (evt) {
+                var trigger = evt.target && evt.target.closest ? evt.target.closest(".tooltip-trigger") : null;
                 if (trigger) {
-                    evt.preventDefault();
-                    evt.stopPropagation();
-                    var wrapper = trigger.closest(".tooltip-wrapper");
-                    if (wrapper) {
-                        adjustTooltipPosition(wrapper);
-                        wrapper.classList.toggle("is-open");
+                    showTooltipFor(trigger);
+                }
+            });
+
+            document.addEventListener("mouseout", function (evt) {
+                var trigger = evt.target && evt.target.closest ? evt.target.closest(".tooltip-trigger") : null;
+                if (trigger && trigger !== pinnedTrigger) {
+                    var related = evt.relatedTarget;
+                    if (!related || !trigger.contains(related)) {
+                        globalTooltip.classList.remove("is-visible");
                     }
                 }
             });
+
+            document.addEventListener("click", function (evt) {
+                var trigger = evt.target && evt.target.closest ? evt.target.closest(".tooltip-trigger") : null;
+                if (trigger) {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    if (pinnedTrigger === trigger) {
+                        window.hideGlobalTooltip();
+                    } else {
+                        pinnedTrigger = trigger;
+                        showTooltipFor(trigger);
+                    }
+                } else {
+                    window.hideGlobalTooltip();
+                }
+            });
+
+            window.addEventListener("scroll", function () {
+                window.hideGlobalTooltip();
+            }, true);
 
             /* Manejo HTMX */
             document.body.addEventListener("htmx:beforeSwap", function (evt) {

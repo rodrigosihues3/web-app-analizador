@@ -1,9 +1,10 @@
-"""Aplicación monolítica web Offline-First (FastAPI + Jinja2 + HTMX)."""
+"""Aplicación web (FastAPI + Jinja2 + HTMX)."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
+import time
 from typing import Any
 import uuid
 
@@ -74,9 +75,7 @@ def _seleccionar_columnas_por_tipo(
     """Clasifica columnas categóricas y numéricas sugiriendo valores iniciales."""
     constantes = set(columnas_varianza_cero or [])
     cols_numericas = [
-        str(col["columna"])
-        for col in esquema
-        if col.get("tipo_logico") == "numerica"
+        str(col["columna"]) for col in esquema if col.get("tipo_logico") == "numerica"
     ]
     cols_numericas_utiles = [
         c for c in cols_numericas if c not in constantes
@@ -104,9 +103,7 @@ def _seleccionar_columnas_por_tipo(
     )
 
     metricas_preferidas = {"Nota", "Total_Venta"}
-    num_preferidas = [
-        c for c in cols_numericas_utiles if c in metricas_preferidas
-    ]
+    num_preferidas = [c for c in cols_numericas_utiles if c in metricas_preferidas]
     num_default = (
         num_preferidas[0]
         if num_preferidas
@@ -203,6 +200,7 @@ async def cargar_y_auditar_dataset(
     session_anterior: str | None = Form(default=None, alias="session_id"),
 ) -> HTMLResponse:
     """Ingesta un archivo tabular, audita su estructura y genera síntesis inicial."""
+    inicio_analisis = time.perf_counter()
     session_id = str(uuid.uuid4())
     ruta_guardada: Path | None = None
 
@@ -216,6 +214,7 @@ async def cargar_y_auditar_dataset(
         auditoria = auditor.auditar_estructura()
         muestra_filas = auditor.obtener_muestra(3)
         contexto_ia = generar_contexto_ejecutivo(auditoria, muestra_filas)
+        tiempo_analisis_s = round(time.perf_counter() - inicio_analisis, 2)
 
         # Limpia la sesión anterior solo cuando el nuevo archivo se validó bien
         _eliminar_sesion(session_anterior)
@@ -229,9 +228,7 @@ async def cargar_y_auditar_dataset(
             auditoria["esquema"], auditoria.get("columnas_varianza_cero", [])
         )
 
-        total_nulos = sum(
-            int(item.get("nulos", 0)) for item in auditoria["esquema"]
-        )
+        total_nulos = sum(int(item.get("nulos", 0)) for item in auditoria["esquema"])
 
         SESIONES[session_id] = {
             "session_id": session_id,
@@ -267,6 +264,7 @@ async def cargar_y_auditar_dataset(
                 "contexto": contexto_ia,
                 "auditoria": auditoria,
                 "total_nulos": total_nulos,
+                "tiempo_analisis_s": tiempo_analisis_s,
                 "columnas_categoricas": cols_categoricas,
                 "columnas_numericas": cols_numericas,
                 "col_categoria_default": cat_default,
@@ -377,9 +375,7 @@ async def procesar_pipeline_analitico(
         columna_cat = (
             col_categoria or sesion.get("col_categoria_default") or ""
         ).strip()
-        columna_num = (
-            col_numerica or sesion.get("col_numerica_default") or ""
-        ).strip()
+        columna_num = (col_numerica or sesion.get("col_numerica_default") or "").strip()
 
         if not columna_num:
             raise ValueError(
@@ -398,9 +394,7 @@ async def procesar_pipeline_analitico(
         )
 
         estadisticas = resumen_descriptivo(df_limpio)
-        valores_clave = analizar_valores_clave(
-            df_limpio, columna_cat, columna_num
-        )
+        valores_clave = analizar_valores_clave(df_limpio, columna_cat, columna_num)
 
         grafico_histograma = generar_histograma_plotly(df_limpio, columna_num)
         grafico_barras = generar_barras_categoria_plotly(
@@ -501,9 +495,7 @@ async def explicar_grafico_endpoint(
     try:
         id_limpio = session_id.strip()
         if not id_limpio or id_limpio not in SESIONES:
-            raise KeyError(
-                "La sesión de análisis expiró. Sube nuevamente el archivo."
-            )
+            raise KeyError("La sesión de análisis expiró. Sube nuevamente el archivo.")
 
         sesion = SESIONES[id_limpio]
         _asegurar_estado_procesado(sesion)
@@ -550,9 +542,7 @@ async def explicar_grafico_endpoint(
         OSError,
     ) as exc:
         mensaje = exc.args[0] if exc.args else str(exc)
-        logger.warning(
-            "Error controlado en /analizar/explicar-grafico: %s", mensaje
-        )
+        logger.warning("Error controlado en /analizar/explicar-grafico: %s", mensaje)
         return _renderizar_alerta_error(
             request=request,
             titulo="No se pudo interpretar la gráfica",
@@ -583,20 +573,15 @@ async def descargar_dataset_limpio(
         if formato_norm in {"xlsx", "excel"}:
             ext = "xlsx"
             media_type = (
-                "application/vnd.openxmlformats-officedocument."
-                "spreadsheetml.sheet"
+                "application/vnd.openxmlformats-officedocument." "spreadsheetml.sheet"
             )
         else:
             ext = "csv"
             media_type = "text/csv; charset=utf-8"
 
         nombre_descarga = f"{base_nombre}_limpio.{ext}"
-        headers = {
-            "Content-Disposition": f'attachment; filename="{nombre_descarga}"'
-        }
-        return StreamingResponse(
-            buffer, media_type=media_type, headers=headers
-        )
+        headers = {"Content-Disposition": f'attachment; filename="{nombre_descarga}"'}
+        return StreamingResponse(buffer, media_type=media_type, headers=headers)
     except (KeyError, ValueError, FileNotFoundError, OSError) as exc:
         mensaje = exc.args[0] if exc.args else str(exc)
         logger.warning("Error controlado en /export/dataset: %s", mensaje)
@@ -635,9 +620,7 @@ async def descargar_reporte_pdf(
 
         base_nombre = Path(sesion["nombre_archivo"]).stem
         nombre_pdf = f"reporte_{base_nombre}.pdf"
-        headers = {
-            "Content-Disposition": f'attachment; filename="{nombre_pdf}"'
-        }
+        headers = {"Content-Disposition": f'attachment; filename="{nombre_pdf}"'}
         return StreamingResponse(
             pdf_buffer,
             media_type="application/pdf",
