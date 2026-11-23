@@ -1,7 +1,14 @@
 {% from "macros/icons.html" import lucide_icon %}
+{% if ia_disponible == false %}
+<div class="alert-ia-error px-3.5 py-2.5 text-xs font-medium flex items-center gap-2 animate-enter">
+    {{ lucide_icon("alert-triangle", "w-4 h-4 flex-shrink-0") }}
+    <span>{{ interpretacion }}</span>
+</div>
+{% else %}
 <div class="surface-subtle px-3.5 py-2.5 text-xs text-secondary flex items-start gap-2.5 animate-enter">
     <span class="text-accent mt-0.5 flex-shrink-0">
         {{ lucide_icon("sparkles", "w-3.5 h-3.5") }}
     </span>
     <p class="leading-relaxed" data-typewriter="true">{{ interpretacion }}</p>
 </div>
+{% endif %}

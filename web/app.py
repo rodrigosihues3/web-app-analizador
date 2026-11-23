@@ -19,7 +19,11 @@ from core.estadistica import (
     resumen_descriptivo,
 )
 from core.exportador import exportar_dataframe, generar_reporte_pdf
-from core.sintetizador import explicar_grafico_ia, generar_contexto_ejecutivo
+from core.sintetizador import (
+    MENSAJE_IA_NO_DISPONIBLE,
+    explicar_grafico_ia,
+    generar_contexto_ejecutivo,
+)
 from core.transformador import limpiar_dataset
 from core.visualizador import (
     generar_barras_categoria_plotly,
@@ -228,10 +232,6 @@ async def cargar_y_auditar_dataset(
         total_nulos = sum(
             int(item.get("nulos", 0)) for item in auditoria["esquema"]
         )
-        total_outliers = sum(
-            int(info.get("cantidad", 0))
-            for info in auditoria.get("outliers_iqr", {}).values()
-        )
 
         SESIONES[session_id] = {
             "session_id": session_id,
@@ -248,7 +248,7 @@ async def cargar_y_auditar_dataset(
             "config_limpieza": {
                 "eliminar_duplicados": True,
                 "estrategia_nulos": "mediana",
-                "recortar_outliers": True,
+                "valor_nulos": "0",
                 "col_categoria": cat_default,
                 "col_numerica": num_default,
             },
@@ -267,7 +267,6 @@ async def cargar_y_auditar_dataset(
                 "contexto": contexto_ia,
                 "auditoria": auditoria,
                 "total_nulos": total_nulos,
-                "total_outliers": total_outliers,
                 "columnas_categoricas": cols_categoricas,
                 "columnas_numericas": cols_numericas,
                 "col_categoria_default": cat_default,
@@ -356,7 +355,7 @@ async def procesar_pipeline_analitico(
     session_id: str = Form(default=""),
     eliminar_duplicados: str | None = Form(default=None),
     estrategia_nulos: str = Form(default="mediana"),
-    recortar_outliers: str | None = Form(default=None),
+    valor_nulos: str = Form(default="0"),
     col_categoria: str | None = Form(default=None),
     col_numerica: str | None = Form(default=None),
 ) -> HTMLResponse:
@@ -372,8 +371,8 @@ async def procesar_pipeline_analitico(
         df_raw = sesion["df_raw"]
 
         bool_duplicados = _interpretar_booleano(eliminar_duplicados)
-        bool_outliers = _interpretar_booleano(recortar_outliers)
         estrategia_norm = estrategia_nulos.strip().lower() or "mediana"
+        valor_manual = valor_nulos.strip() if valor_nulos is not None else "0"
 
         columna_cat = (
             col_categoria or sesion.get("col_categoria_default") or ""
@@ -395,7 +394,7 @@ async def procesar_pipeline_analitico(
             df_raw,
             eliminar_duplicados=bool_duplicados,
             estrategia_nulos=estrategia_norm,
-            recortar_outliers=bool_outliers,
+            valor_nulos=valor_manual,
         )
 
         estadisticas = resumen_descriptivo(df_limpio)
@@ -412,7 +411,7 @@ async def procesar_pipeline_analitico(
         config_actual = {
             "eliminar_duplicados": bool_duplicados,
             "estrategia_nulos": estrategia_norm,
-            "recortar_outliers": bool_outliers,
+            "valor_nulos": valor_manual,
             "col_categoria": columna_cat,
             "col_numerica": columna_num,
         }
@@ -467,7 +466,7 @@ def _asegurar_estado_procesado(sesion: dict[str, Any]) -> None:
         sesion["df_raw"],
         eliminar_duplicados=bool(config.get("eliminar_duplicados", True)),
         estrategia_nulos=str(config.get("estrategia_nulos", "mediana")),
-        recortar_outliers=bool(config.get("recortar_outliers", True)),
+        valor_nulos=config.get("valor_nulos", "0"),
     )
     estadisticas = resumen_descriptivo(df_limpio)
 
@@ -540,6 +539,7 @@ async def explicar_grafico_endpoint(
             name="partials/explicacion_grafico.html",
             context={
                 "interpretacion": interpretacion,
+                "ia_disponible": interpretacion != MENSAJE_IA_NO_DISPONIBLE,
             },
         )
     except (

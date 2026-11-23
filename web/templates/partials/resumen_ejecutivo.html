@@ -1,9 +1,17 @@
+{% from "macros/icons.html" import lucide_icon %}
 <div>
     <h2 class="text-base sm:text-lg font-semibold text-primary heading-tight">
         {{ contexto.titulo_reporte }}
     </h2>
+    {% if contexto.get("ia_disponible") == false %}
+    <div class="alert-ia-error px-3.5 py-2.5 mt-2 text-xs font-medium flex items-center gap-2">
+        {{ lucide_icon("alert-triangle", "w-4 h-4 flex-shrink-0") }}
+        <span>{{ contexto.resumen_ejecutivo }}</span>
+    </div>
+    {% else %}
     <p
         class="text-sm text-secondary mt-1.5 leading-relaxed whitespace-pre-line"
         {% if animar_escritura %}data-typewriter="true"{% endif %}
     >{{ contexto.resumen_ejecutivo }}</p>
+    {% endif %}
 </div>

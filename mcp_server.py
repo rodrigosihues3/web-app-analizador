@@ -1,6 +1,4 @@
-"""Servidor MCP interactivo (2 pasos) para exponer el núcleo analítico."""
-
-from __future__ import annotations
+"""Servidor MCP interactivo (2 pasos) para auditar, limpiar y exportar datasets."""
 
 import json
 from pathlib import Path
@@ -25,13 +23,74 @@ from core.visualizador import generar_graficos_estaticos_pdf
 
 mcp = FastMCP("AnalizadorMultiparadigma")
 
-EstrategiaNulos = Literal["eliminar", "media", "mediana", "moda", "ninguna"]
+EstrategiaNulos = Literal[
+    "eliminar", "media", "mediana", "moda", "personalizado", "ninguna"
+]
+
+
+def _resolver_ruta_archivo(ruta_o_nombre: str) -> Path:
+    """Localiza un archivo CSV o XLSX por ruta completa o por nombre en carpetas del usuario."""
+    texto = ruta_o_nombre.strip().strip('"').strip("'")
+    if not texto:
+        raise ValueError("Debes indicar el nombre o la ruta del archivo.")
+
+    candidato_directo = Path(texto).expanduser()
+    try:
+        if candidato_directo.exists() and candidato_directo.is_file():
+            return candidato_directo.resolve()
+    except OSError:
+        pass
+
+    nombre = candidato_directo.name
+    posibles_nombres = [nombre]
+    if Path(nombre).suffix.lower() not in (".csv", ".xlsx"):
+        posibles_nombres.append(f"{nombre}.csv")
+        posibles_nombres.append(f"{nombre}.xlsx")
+
+    home = Path.home()
+    directorios_busqueda = [
+        BASE_DIR / "datasets",
+        BASE_DIR,
+        home / "Downloads",
+        home / "Descargas",
+        home / "Desktop",
+        home / "Escritorio",
+        home / "Documents",
+        home / "Documentos",
+    ]
+
+    for carpeta in directorios_busqueda:
+        try:
+            if not carpeta.exists():
+                continue
+            for nom in posibles_nombres:
+                ruta_posible = carpeta / nom
+                if ruta_posible.exists() and ruta_posible.is_file():
+                    return ruta_posible.resolve()
+        except OSError:
+            continue
+
+    for carpeta_profunda in (home / "Downloads", home / "Documents"):
+        try:
+            if not carpeta_profunda.exists():
+                continue
+            for nom in posibles_nombres:
+                for encontrado in carpeta_profunda.rglob(nom):
+                    if encontrado.is_file():
+                        return encontrado.resolve()
+        except OSError:
+            continue
+
+    raise FileNotFoundError(
+        f"No se encontró '{ruta_o_nombre}' en la ruta indicada ni en Descargas, "
+        "Documentos, Escritorio o datasets/."
+    )
 
 
 def _detectar_columnas_clave(
     auditoria: dict[str, Any],
 ) -> tuple[str | None, str | None]:
-    """Sugiere automáticamente una columna categórica y una numérica útil."""
+    """Sugiere automáticamente una columna categórica y una numérica del esquema."""
     esquema = auditoria.get("esquema", [])
     constantes = set(auditoria.get("columnas_varianza_cero", []))
 
@@ -65,10 +124,20 @@ def _detectar_columnas_clave(
 
 @mcp.tool()
 def auditar_dataset_mcp(ruta_archivo: str) -> str:
-    """Paso 1 obligatorio: Audita la estructura, calidad, valores nulos, filas duplicadas y valores atípicos de un archivo CSV o XLSX. Tras recibir este diagnóstico, DEBES presentar un resumen claro de los problemas encontrados al usuario y preguntarle explícitamente: (1) qué estrategia prefiere para valores nulos ('mediana', 'media', 'moda', 'eliminar' o 'ninguna'), (2) si desea eliminar duplicados (True/False), (3) si desea acotar valores extremos IQR (True/False), y opcionalmente (4) qué columna categórica y numérica del esquema desea comparar antes de ejecutar 'procesar_y_exportar_mcp'."""
+    """Paso 1 obligatorio: Audita la estructura, columnas, valores nulos y filas duplicadas de un archivo CSV o XLSX. Puedes pasar la ruta completa O simplemente el nombre del archivo (ej. 'Lista_Alumnos_Notas.csv' o 'Lista_Alumnos_Notas') y esta herramienta lo buscará automáticamente en Descargas, Documentos, Escritorio y datasets/. Tras recibir el resultado, DEBES mostrar al usuario el resumen de nulos y duplicados y preguntarle antes de llamar a 'procesar_y_exportar_mcp': (1) cómo desea tratar los valores nulos ('mediana', 'media', 'moda', 'eliminar', 'ninguna' o 'personalizado' indicando un valor manual como 0), (2) si desea eliminar duplicados (True/False), y (3) qué columna categórica y qué columna numérica desea analizar."""
     try:
-        auditor = DatasetAuditor(ruta_archivo)
+        ruta_resuelta = _resolver_ruta_archivo(ruta_archivo)
+        auditor = DatasetAuditor(str(ruta_resuelta))
         diagnostico = auditor.auditar_estructura()
+        diagnostico["ruta_resuelta"] = str(ruta_resuelta)
+        diagnostico["opciones_nulos_disponibles"] = [
+            "mediana",
+            "media",
+            "moda",
+            "personalizado (permite rellenar con 0 u otro valor en 'valor_nulos')",
+            "eliminar",
+            "ninguna",
+        ]
         return json.dumps(diagnostico, ensure_ascii=False, indent=2)
     except (FileNotFoundError, ValueError, OSError) as exc:
         return json.dumps(
@@ -81,26 +150,41 @@ def auditar_dataset_mcp(ruta_archivo: str) -> str:
 @mcp.tool()
 def procesar_y_exportar_mcp(
     ruta_archivo: str,
-    carpeta_salida: str,
+    carpeta_salida: str = "",
     eliminar_duplicados: bool = True,
-    estrategia_nulos: EstrategiaNulos = "mediana",
-    recortar_outliers: bool = False,
+    estrategia_nulos: str = "mediana",
+    valor_nulos: str = "0",
     col_categoria: str = "",
     col_metrica: str = "",
 ) -> str:
-    """Paso 2: Aplica la limpieza configurada por el usuario sobre el dataset, calcula estadísticas descriptivas y genera tanto el archivo CSV limpio como el reporte técnico en PDF dentro de 'carpeta_salida'. Retorna las rutas de los archivos generados y las métricas clave para redactar el resumen final."""
+    """Paso 2: Limpia el dataset según las opciones elegidas por el usuario, calcula estadísticas descriptivas (incluyendo Media, Mediana y Moda) y exporta el CSV limpio y el reporte PDF en 'carpeta_salida' (si se deja vacía, los guarda en la misma carpeta del archivo original). Para reemplazar nulos con un número fijo como 0, usa estrategia_nulos='personalizado' y valor_nulos='0'."""
     try:
-        if not carpeta_salida or not isinstance(carpeta_salida, str):
-            raise ValueError("La carpeta de salida debe ser una ruta no vacía.")
-
-        auditor = DatasetAuditor(ruta_archivo)
+        ruta_resuelta = _resolver_ruta_archivo(ruta_archivo)
+        auditor = DatasetAuditor(str(ruta_resuelta))
         auditoria = auditor.auditar_estructura()
+
+        estrategia_limpia = estrategia_nulos.strip().lower()
+        valor_manual = valor_nulos
+        if estrategia_limpia not in (
+            "eliminar",
+            "media",
+            "mediana",
+            "moda",
+            "personalizado",
+            "ninguna",
+        ):
+            try:
+                float(estrategia_limpia)
+                valor_manual = estrategia_limpia
+                estrategia_limpia = "personalizado"
+            except ValueError:
+                pass
 
         df_limpio, logs = limpiar_dataset(
             auditor.df_raw,
             eliminar_duplicados=eliminar_duplicados,
-            estrategia_nulos=estrategia_nulos,
-            recortar_outliers=recortar_outliers,
+            estrategia_nulos=estrategia_limpia,
+            valor_nulos=valor_manual,
         )
         estadisticas = resumen_descriptivo(df_limpio)
 
@@ -122,9 +206,13 @@ def procesar_y_exportar_mcp(
         )
         imagenes_graficos = generar_graficos_estaticos_pdf(df_limpio)
 
-        directorio = Path(carpeta_salida)
+        directorio = (
+            Path(carpeta_salida).expanduser()
+            if carpeta_salida and carpeta_salida.strip()
+            else ruta_resuelta.parent
+        )
         directorio.mkdir(parents=True, exist_ok=True)
-        nombre_base = Path(ruta_archivo).stem
+        nombre_base = ruta_resuelta.stem
 
         ruta_csv = directorio / f"{nombre_base}_limpio.csv"
         csv_buffer = exportar_dataframe(df_limpio, formato="csv")

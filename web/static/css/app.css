@@ -306,6 +306,13 @@ input[type="checkbox"] {
     border-radius: 9999px;
 }
 
+.alert-ia-error {
+    background-color: var(--status-danger-bg);
+    color: var(--status-danger-text);
+    border: 1px solid var(--status-danger-border);
+    border-radius: 8px;
+}
+
 .badge-neutral {
     background-color: var(--surface-subtle);
     color: var(--text-secondary);
@@ -434,8 +441,12 @@ input[type="checkbox"] {
     opacity: 0;
 }
 
-.accordion-inner {
+.accordion-card.is-collapsed .accordion-inner {
     overflow: hidden;
+}
+
+.accordion-card:not(.is-collapsed) .accordion-inner {
+    overflow: visible;
 }
 
 .accordion-chevron {

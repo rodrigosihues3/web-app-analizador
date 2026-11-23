@@ -1,13 +1,10 @@
 """Módulo de visualización dual: gráficos web Plotly y PNG estáticos para PDF."""
 
-from __future__ import annotations
-
 import io
 import logging
 
 import matplotlib
 
-# Backend 'Agg' genera imágenes PNG en memoria sin abrir ventanas gráficas
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -376,7 +373,6 @@ def generar_heatmap_plotly(df: pd.DataFrame) -> str:
 
 def _guardar_figura_bytes(fig: plt.Figure) -> io.BytesIO:
     """Serializa una figura Matplotlib a PNG en memoria a 150 DPI."""
-    # BytesIO actúa como archivo temporal en RAM para incrustar la imagen en el PDF
     buffer = io.BytesIO()
     fig.savefig(
         buffer,

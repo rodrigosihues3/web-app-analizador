@@ -125,11 +125,12 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
         self.assertEqual(resp_carga.status_code, 200)
         html_auditoria = resp_carga.text
         self.assertIn("nulos", html_auditoria.lower())
-        self.assertIn("atípicos", html_auditoria.lower())
         self.assertIn("Calidad de los datos", html_auditoria)
         self.assertIn("Configuración del análisis", html_auditoria)
         self.assertIn('id="btn-abrir-modal-carga"', html_auditoria)
-        self.assertIn("Analizar nuevo archivo", html_auditoria)
+        self.assertIn("Analizar otro archivo", html_auditoria)
+        self.assertIn("Regenerar resumen con IA", html_auditoria)
+        self.assertIn("Procesar datos", html_auditoria)
 
         coincidencia = re.search(
             r'name="session_id"\s+value="([0-9a-fA-F-]+)"', html_auditoria
@@ -151,22 +152,22 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
         texto_visible = re.sub(r"<[^>]+>", " ", html_auditoria)
         self.assertNotIn(session_id, texto_visible)
 
-        # Regenerar resumen ejecutivo
+        # Regenerar resumen ejecutivo (en modo offline muestra aviso rojo de IA no disponible)
         resp_regen = self.client.post(
             "/analizar/regenerar-resumen",
             data={"session_id": session_id},
         )
         self.assertEqual(resp_regen.status_code, 200)
-        self.assertIn('data-typewriter="true"', resp_regen.text)
+        self.assertIn("alert-ia-error", resp_regen.text)
 
-        # Ejecutar POST /analizar/procesar
+        # Ejecutar POST /analizar/procesar con valor personalizado 0
         resp_proc = self.client.post(
             "/analizar/procesar",
             data={
                 "session_id": session_id,
                 "eliminar_duplicados": "true",
-                "estrategia_nulos": "mediana",
-                "recortar_outliers": "true",
+                "estrategia_nulos": "personalizado",
+                "valor_nulos": "0",
                 "col_categoria": "Asignatura",
                 "col_numerica": "Nota",
             },
@@ -179,12 +180,15 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
         self.assertIn("contenedor-plotly-heatmap", html_resultados)
         self.assertIn("plotly-graph-div", html_resultados)
         self.assertIn('"displaymodebar": false', html_resultados.lower())
+        self.assertIn("Media (Nota)", html_resultados)
+        self.assertIn("Mediana (Nota)", html_resultados)
+        self.assertIn("Moda (Nota)", html_resultados)
         self.assertIn("Registro máximo global", html_resultados)
         self.assertIn("Categoría líder en promedio", html_resultados)
         self.assertIn("Duplicados eliminados", html_resultados)
         self.assertIn("Analizar con IA", html_resultados)
 
-        # Explicabilidad IA (respaldo determinista offline) para las 3 gráficas
+        # Explicabilidad IA (en modo offline muestra aviso rojo de IA no disponible)
         for tipo in ("histograma", "barras", "correlacion"):
             resp_exp = self.client.post(
                 "/analizar/explicar-grafico",
@@ -196,8 +200,7 @@ class TestMonolitoWebOfflineFirst(unittest.TestCase):
                 },
             )
             self.assertEqual(resp_exp.status_code, 200)
-            self.assertIn('data-typewriter="true"', resp_exp.text)
-            self.assertNotIn("**", resp_exp.text)
+            self.assertIn("alert-ia-error", resp_exp.text)
 
         # Exportar Dataset Limpio (.CSV)
         resp_csv = self.client.get(

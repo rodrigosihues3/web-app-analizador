@@ -56,10 +56,10 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
         self.assertEqual(
             esquema_por_col["Asignatura"]["tipo_logico"], "categorica"
         )
-        self.assertEqual(auditoria["outliers_iqr"]["Nota"]["cantidad"], 1)
+        self.assertNotIn("outliers_iqr", auditoria)
 
     def test_auditoria_retail_sales(self) -> None:
-        """Verifica detección de nulos en Cantidad, outlier en Total_Venta y fechas."""
+        """Verifica detección de nulos en Cantidad y fechas."""
         auditor = DatasetAuditor(str(RUTA_RETAIL))
         auditoria = auditor.auditar_estructura()
 
@@ -72,9 +72,7 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
         }
         self.assertEqual(esquema_por_col["Cantidad"]["nulos"], 2)
         self.assertEqual(esquema_por_col["Fecha"]["tipo_logico"], "fecha")
-        self.assertGreaterEqual(
-            auditoria["outliers_iqr"]["Total_Venta"]["cantidad"], 1
-        )
+        self.assertNotIn("outliers_iqr", auditoria)
 
     def test_auditoria_xlsx_latin1_y_errores(self) -> None:
         """Valida soporte Excel, fallback latin-1, varianza cero y errores."""
@@ -125,7 +123,7 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
                 DatasetAuditor(str(tmp_path / "no_existe.csv"))
 
     def test_limpieza_funcional_sin_mutacion(self) -> None:
-        """Verifica pureza funcional, estrategias de nulos y recorte IQR."""
+        """Verifica pureza funcional y estrategias de nulos incluyendo valor personalizado."""
         auditor = DatasetAuditor(str(RUTA_NOTAS))
         copia_antes = auditor.df_raw.copy(deep=True)
 
@@ -133,15 +131,24 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
             auditor.df_raw,
             eliminar_duplicados=True,
             estrategia_nulos="mediana",
-            recortar_outliers=True,
         )
 
         # df_raw permanece intacto
         pd.testing.assert_frame_equal(auditor.df_raw, copia_antes)
         self.assertEqual(len(df_limpio), 24)
         self.assertEqual(int(df_limpio.isna().sum().sum()), 0)
-        self.assertLess(float(df_limpio["Nota"].max()), 99.0)
         self.assertTrue(any("Duplicados eliminados" in msg for msg in logs))
+
+        # Reemplazo con valor personalizado (ej. 0)
+        df_cero, logs_cero = limpiar_dataset(
+            auditor.df_raw,
+            eliminar_duplicados=True,
+            estrategia_nulos="personalizado",
+            valor_nulos="0",
+        )
+        self.assertEqual(int(df_cero.isna().sum().sum()), 0)
+        self.assertIn(0.0, df_cero["Nota"].values)
+        self.assertTrue(any("valor manual" in msg for msg in logs_cero))
 
         # Otras estrategias válidas y categóricas con nulos
         df_cat = pd.DataFrame(
@@ -176,16 +183,19 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
             auditor.df_raw,
             eliminar_duplicados=True,
             estrategia_nulos="mediana",
-            recortar_outliers=False,
         )
 
         stats = resumen_descriptivo(df_limpio)
         cols_stats = {s["columna"]: s for s in stats}
         self.assertIn("Total_Venta", cols_stats)
         self.assertIn("asimetria", cols_stats["Total_Venta"])
+        self.assertIn("moda", cols_stats["Total_Venta"])
 
         clave = analizar_valores_clave(df_limpio, "Region", "Total_Venta")
         self.assertEqual(clave["valor_maximo"], 85000.0)
+        self.assertIn("media_metrica", clave)
+        self.assertIn("mediana_metrica", clave)
+        self.assertIn("moda_metrica", clave)
         self.assertEqual(
             clave["categoria_lider_acumulado"]["categoria"], "Norte"
         )
@@ -216,7 +226,6 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
             auditor.df_raw,
             eliminar_duplicados=True,
             estrategia_nulos="mediana",
-            recortar_outliers=True,
         )
 
         html_hist = generar_histograma_plotly(df_limpio, "Nota")
@@ -312,7 +321,6 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
                 auditor.df_raw,
                 eliminar_duplicados=True,
                 estrategia_nulos="mediana",
-                recortar_outliers=True,
             )
 
             csv_buf = exportar_dataframe(df_limpio, formato="csv")
@@ -364,7 +372,7 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
             },
         )
 
-        aud_json = json.loads(mcp_server.auditar_dataset_mcp(str(RUTA_NOTAS)))
+        aud_json = json.loads(mcp_server.auditar_dataset_mcp("notas_estudiantes"))
         self.assertEqual(aud_json["filas"], 25)
         self.assertEqual(aud_json["duplicados"], 1)
 
@@ -374,8 +382,8 @@ class TestAnalizadorMultiparadigma(unittest.TestCase):
                     ruta_archivo=str(RUTA_RETAIL),
                     carpeta_salida=tmp_dir,
                     eliminar_duplicados=True,
-                    estrategia_nulos="mediana",
-                    recortar_outliers=True,
+                    estrategia_nulos="personalizado",
+                    valor_nulos="0",
                     col_categoria="Categoria",
                     col_metrica="Total_Venta",
                 )

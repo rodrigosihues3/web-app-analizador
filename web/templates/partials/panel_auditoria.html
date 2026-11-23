@@ -9,10 +9,6 @@
                 <span>
                     {% if total_nulos > 0 %}{{ total_nulos }} nulos{% else %}Sin nulos{% endif %}
                 </span>
-                {% if total_outliers > 0 %}
-                <span class="text-muted">·</span>
-                <span>{{ total_outliers }} atípicos</span>
-                {% endif %}
             </div>
 
             <button
@@ -22,17 +18,17 @@
                 hx-target="#bloque-resumen-ejecutivo"
                 hx-swap="innerHTML"
                 hx-sync="this:drop"
-                class="btn-ghost px-2.5 py-1 text-xs font-medium"
-                aria-label="Regenerar resumen"
-                title="Regenerar resumen"
+                class="btn-secondary px-2.5 py-1 text-xs font-medium"
+                aria-label="Regenerar resumen con IA"
+                title="Regenerar resumen con IA"
             >
                 <span class="hide-on-request inline-flex items-center gap-1.5">
-                    {{ lucide_icon("refresh-cw", "w-3.5 h-3.5") }}
-                    <span>Regenerar resumen</span>
+                    {{ lucide_icon("sparkles", "w-3.5 h-3.5 text-accent") }}
+                    <span>Regenerar resumen con IA</span>
                 </span>
                 <span class="htmx-indicator items-center gap-1.5 text-accent">
                     <span class="icon-spin inline-flex">{{ lucide_icon("refresh-cw", "w-3.5 h-3.5") }}</span>
-                    <span>Actualizando...</span>
+                    <span>Consultando IA...</span>
                 </span>
             </button>
         </div>
@@ -90,7 +86,7 @@
                         <button type="button" class="tooltip-trigger" aria-label="Qué significa Varianza cero">
                             {{ lucide_icon("help-circle", "w-3.5 h-3.5") }}
                         </button>
-                        <span class="tooltip-popover" role="tooltip">
+                        <span class="tooltip-popover align-right" role="tooltip">
                             Detecta columnas constantes cuyo valor nunca cambia y no aportan información estadística.
                         </span>
                     </span>
@@ -134,14 +130,11 @@
                                 <th class="text-left">Tipo de dato</th>
                                 <th class="text-right">Nulos</th>
                                 <th class="text-right">Únicos</th>
-                                <th class="text-right">Atípicos</th>
                                 <th class="text-left">Estado</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for item in auditoria.esquema %}
-                            {% set info_outlier = auditoria.outliers_iqr.get(item.columna, {}) %}
-                            {% set cant_outlier = info_outlier.get("cantidad", 0) %}
                             <tr>
                                 <td class="font-medium text-primary">{{ item.columna }}</td>
                                 <td class="text-secondary">
@@ -154,20 +147,9 @@
                                 <td class="text-right font-mono tabular-nums">
                                     {{ item.valores_unicos }}
                                 </td>
-                                <td class="text-right font-mono tabular-nums">
-                                    {% if item.tipo_logico == "numerica" %}
-                                        {{ cant_outlier }}
-                                    {% else %}
-                                        <span class="text-muted">—</span>
-                                    {% endif %}
-                                </td>
                                 <td>
                                     {% if item.columna in auditoria.columnas_varianza_cero %}
                                         <span class="inline-block px-2 py-0.5 text-xs font-medium badge-neutral">Constante</span>
-                                    {% elif cant_outlier > 0 and item.nulos > 0 %}
-                                        <span class="inline-block px-2 py-0.5 text-xs font-medium badge-danger">Nulos y atípicos</span>
-                                    {% elif cant_outlier > 0 %}
-                                        <span class="inline-block px-2 py-0.5 text-xs font-medium badge-danger">Atípicos</span>
                                     {% elif item.nulos > 0 %}
                                         <span class="inline-block px-2 py-0.5 text-xs font-medium badge-warn">Con nulos</span>
                                     {% else %}
@@ -211,7 +193,7 @@
                     <input type="hidden" name="session_id" value="{{ session_id }}">
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
+                        <div class="space-y-2">
                             <div class="flex items-center gap-1 mb-1.5">
                                 <label for="select-estrategia-nulos" class="text-xs font-medium text-secondary">
                                     Valores nulos
@@ -220,18 +202,38 @@
                                     <button type="button" class="tooltip-trigger" aria-label="Ayuda sobre Valores nulos">
                                         {{ lucide_icon("help-circle", "w-3.5 h-3.5") }}
                                     </button>
-                                    <span class="tooltip-popover" role="tooltip">
-                                        Mediana: valor central (resiste extremos). Media: promedio aritmético. Moda: valor más frecuente. Eliminar: descarta filas incompletas.
+                                    <span class="tooltip-popover place-bottom align-left" role="tooltip">
+                                        Mediana: valor central. Media: promedio aritmético. Moda: valor más frecuente. Valor manual: reemplaza nulos por un número fijo (ej. 0). Eliminar: descarta filas incompletas.
                                     </span>
                                 </span>
                             </div>
-                            <select id="select-estrategia-nulos" name="estrategia_nulos" class="form-control w-full px-3 py-2 text-xs">
+                            <select
+                                id="select-estrategia-nulos"
+                                name="estrategia_nulos"
+                                onchange="document.getElementById('bloque-valor-manual').classList.toggle('hidden', this.value !== 'personalizado')"
+                                class="form-control w-full px-3 py-2 text-xs"
+                            >
                                 <option value="mediana" selected>Imputar con mediana</option>
                                 <option value="media">Imputar con media</option>
                                 <option value="moda">Imputar con moda</option>
+                                <option value="personalizado">Reemplazar por valor manual</option>
                                 <option value="eliminar">Eliminar filas con nulos</option>
                                 <option value="ninguna">Conservar sin cambios</option>
                             </select>
+
+                            <div id="bloque-valor-manual" class="hidden pt-1">
+                                <label for="input-valor-nulos" class="block text-xs text-muted mb-1">
+                                    Valor de reemplazo (ej. 0):
+                                </label>
+                                <input
+                                    id="input-valor-nulos"
+                                    type="text"
+                                    name="valor_nulos"
+                                    value="0"
+                                    placeholder="0"
+                                    class="form-control w-full px-3 py-1.5 text-xs font-mono"
+                                >
+                            </div>
                         </div>
 
                         <div>
@@ -261,7 +263,7 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
                         <label class="surface-subtle p-3.5 flex items-start gap-3 cursor-pointer">
                             <input
                                 type="checkbox"
@@ -277,40 +279,11 @@
                                 </span>
                             </div>
                         </label>
-
-                        <div class="surface-subtle p-3.5 flex items-start gap-3">
-                            <input
-                                id="chk-outliers"
-                                type="checkbox"
-                                name="recortar_outliers"
-                                value="true"
-                                checked
-                                class="mt-0.5 h-4 w-4 rounded cursor-pointer"
-                            >
-                            <div class="flex-1">
-                                <div class="flex items-center gap-1">
-                                    <label for="chk-outliers" class="text-xs font-medium text-primary cursor-pointer">
-                                        Limitar valores extremos
-                                    </label>
-                                    <span class="tooltip-wrapper">
-                                        <button type="button" class="tooltip-trigger" aria-label="Ayuda sobre Limitar valores extremos">
-                                            {{ lucide_icon("help-circle", "w-3.5 h-3.5") }}
-                                        </button>
-                                        <span class="tooltip-popover" role="tooltip">
-                                            Acota cifras atípicas hacia los límites del rango intercuartílico (Q1 − 1.5·IQR y Q3 + 1.5·IQR) para evitar distorsiones en promedios y gráficas.
-                                        </span>
-                                    </span>
-                                </div>
-                                <span class="block text-xs text-muted mt-0.5">
-                                    Ajusta valores fuera del rango estadístico normal sin eliminar filas.
-                                </span>
-                            </div>
-                        </div>
                     </div>
 
                     <div class="flex items-center justify-end pt-2 border-t border-hairline">
                         <button type="submit" class="btn-primary px-5 py-2 text-sm">
-                            <span class="hide-on-request">Ejecutar análisis</span>
+                            <span class="hide-on-request">Procesar datos</span>
                             <span class="htmx-indicator items-center gap-2">
                                 <span class="icon-spin inline-flex">{{ lucide_icon("refresh-cw", "w-4 h-4") }}</span>
                                 <span>Procesando...</span>
@@ -335,7 +308,7 @@
     class="btn-primary px-3.5 py-1.5 text-xs"
 >
     {{ lucide_icon("upload", "w-3.5 h-3.5") }}
-    <span>Analizar nuevo archivo</span>
+    <span>Analizar otro archivo</span>
 </button>
 
 <input type="hidden" id="session-actual" hx-swap-oob="true" name="session_id" value="{{ session_id }}">

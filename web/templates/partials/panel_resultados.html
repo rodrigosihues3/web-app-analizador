@@ -8,7 +8,7 @@
                     {{ lucide_icon("check-circle", "w-4 h-4") }}
                 </span>
                 <div>
-                    <h3 class="text-sm font-semibold text-primary">Resultados del análisis</h3>
+                    <h3 class="text-sm font-semibold text-primary">Resultados del procesamiento</h3>
                     <p class="text-xs text-muted tabular-nums">
                         {{ filas_limpias }} de {{ filas_originales }} registros conservados
                     </p>
@@ -52,8 +52,40 @@
         </details>
     </section>
 
-    <!-- 2. Indicadores de Valores Clave (3 filas alineadas uniformemente) -->
+    <!-- 2. Indicadores KPI de Media, Mediana y Moda + Valores Clave por Categoría -->
     {% if valores_clave %}
+    <section class="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-enter delay-1">
+        <div class="surface-card p-4 flex flex-col justify-between gap-1">
+            <div class="text-xs text-muted">Media ({{ valores_clave.col_metrica }})</div>
+            <div class="text-xl leading-7 font-semibold font-mono text-accent tabular-nums">
+                {{ "%.2f"|format(valores_clave.media_metrica) }}
+            </div>
+            <div class="text-xs text-secondary">
+                Promedio aritmético de la métrica elegida
+            </div>
+        </div>
+
+        <div class="surface-card p-4 flex flex-col justify-between gap-1">
+            <div class="text-xs text-muted">Mediana ({{ valores_clave.col_metrica }})</div>
+            <div class="text-xl leading-7 font-semibold font-mono text-primary tabular-nums">
+                {{ "%.2f"|format(valores_clave.mediana_metrica) }}
+            </div>
+            <div class="text-xs text-secondary">
+                Valor central de los datos ordenados
+            </div>
+        </div>
+
+        <div class="surface-card p-4 flex flex-col justify-between gap-1">
+            <div class="text-xs text-muted">Moda ({{ valores_clave.col_metrica }})</div>
+            <div class="text-xl leading-7 font-semibold font-mono text-primary tabular-nums">
+                {{ "%.2f"|format(valores_clave.moda_metrica) }}
+            </div>
+            <div class="text-xs text-secondary">
+                Valor que más veces se repite
+            </div>
+        </div>
+    </section>
+
     <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-enter delay-1">
         <div class="surface-card p-4 flex flex-col justify-between gap-1.5">
             <div class="text-xs text-muted">Registro máximo global</div>
@@ -124,6 +156,7 @@
                         </th>
                         <th class="text-right">Media</th>
                         <th class="text-right">Mediana</th>
+                        <th class="text-right">Moda</th>
                         <th class="text-right">
                             <span class="inline-flex items-center justify-end gap-1">
                                 <span>Desv. Est.</span>
@@ -187,6 +220,7 @@
                         <td class="text-right font-mono tabular-nums text-secondary">{{ st.conteo }}</td>
                         <td class="text-right font-mono tabular-nums font-medium">{{ "%.2f"|format(st.media) }}</td>
                         <td class="text-right font-mono tabular-nums font-medium">{{ "%.2f"|format(st.mediana) }}</td>
+                        <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.moda) }}</td>
                         <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.desviacion_estandar) }}</td>
                         <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.minimo) }}</td>
                         <td class="text-right font-mono tabular-nums text-secondary">{{ "%.2f"|format(st.maximo) }}</td>
@@ -213,7 +247,7 @@
                         <button type="button" class="tooltip-trigger" aria-label="Qué muestra el histograma">
                             {{ lucide_icon("help-circle", "w-3.5 h-3.5") }}
                         </button>
-                        <span class="tooltip-popover" role="tooltip">
+                        <span class="tooltip-popover place-bottom align-left" role="tooltip">
                             Muestra cómo se distribuyen los valores de {{ config_limpieza.col_numerica }} junto con las líneas de tendencia central (media, mediana y moda).
                         </span>
                     </span>
@@ -256,7 +290,7 @@
                         <button type="button" class="tooltip-trigger" aria-label="Qué muestra el gráfico de barras">
                             {{ lucide_icon("help-circle", "w-3.5 h-3.5") }}
                         </button>
-                        <span class="tooltip-popover" role="tooltip">
+                        <span class="tooltip-popover place-bottom align-left" role="tooltip">
                             Compara el promedio de {{ config_limpieza.col_numerica }} en cada grupo de {{ config_limpieza.col_categoria }} ordenado de mayor a menor frente al promedio general.
                         </span>
                     </span>
@@ -299,8 +333,8 @@
                         <button type="button" class="tooltip-trigger" aria-label="Qué muestra el mapa de calor">
                             {{ lucide_icon("help-circle", "w-3.5 h-3.5") }}
                         </button>
-                        <span class="tooltip-popover" role="tooltip">
-                            Representa la correlación de Pearson entre variables numéricas: valores cercanos a 1 o -1 indican relación lineal fuerte.
+                        <span class="tooltip-popover place-bottom align-left" role="tooltip">
+                            Mide la relación lineal entre pares de variables numéricas (−1 a +1): valores cercanos a +1 indican que crecen juntas y cercanos a 0 indican independencia.
                         </span>
                     </span>
                 </div>
@@ -309,7 +343,7 @@
                     type="button"
                     hx-post="/analizar/explicar-grafico"
                     hx-vals='{"session_id": "{{ session_id }}", "tipo_grafico": "correlacion", "col_numerica": "{{ config_limpieza.col_numerica }}", "col_categoria": "{{ config_limpieza.col_categoria }}"}'
-                    hx-target="#explicacion-correlacion"
+                    hx-target="#explicacion-heatmap"
                     hx-sync="this:drop"
                     class="btn-secondary px-2.5 py-1 text-xs"
                 >
@@ -328,7 +362,7 @@
                 {{ grafico_heatmap | safe }}
             </div>
 
-            <div id="explicacion-correlacion" class="px-4 pb-4"></div>
+            <div id="explicacion-heatmap" class="px-4 pb-4"></div>
         </article>
     </section>
 </div>

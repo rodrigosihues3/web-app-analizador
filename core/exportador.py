@@ -1,7 +1,5 @@
 """Módulo de exportación tabular (CSV / Excel) y generación de reportes PDF."""
 
-from __future__ import annotations
-
 from datetime import datetime
 import io
 from typing import Any
@@ -275,28 +273,6 @@ def generar_reporte_pdf(
         elementos.append(tabla_esquema)
         elementos.append(Spacer(1, 0.25 * cm))
 
-    outliers_iqr = auditoria.get("outliers_iqr", {})
-    if outliers_iqr:
-        filas_outliers = [
-            ["Columna Numérica", "Outliers IQR", "Límite Inferior", "Límite Superior"]
-        ]
-        for col_name, info in outliers_iqr.items():
-            filas_outliers.append(
-                [
-                    Paragraph(_escapar_texto(col_name), estilo_celda),
-                    str(info.get("cantidad", 0)),
-                    _formatear_numero(info.get("limite_inferior"), 2),
-                    _formatear_numero(info.get("limite_superior"), 2),
-                ]
-            )
-        tabla_outliers = Table(
-            filas_outliers,
-            colWidths=[5.8 * cm, 3.2 * cm, 4.2 * cm, 4.2 * cm],
-            repeatRows=1,
-        )
-        tabla_outliers.setStyle(_estilo_tabla_corporativa())
-        elementos.append(tabla_outliers)
-
     # 3. Bitácora de limpieza funcional
     elementos.append(
         Paragraph("2. Bitácora de Limpieza Funcional", estilo_subtitulo)
@@ -430,10 +406,7 @@ def generar_reporte_pdf(
         for titulo_img, img_buffer in imagenes_graficos:
             try:
                 img_buffer.seek(0)
-                datos_img = img_buffer.read()
-                img_buffer.seek(0)
-                copia_stream = io.BytesIO(datos_img)
-                imagen_rl = Image(copia_stream)
+                imagen_rl = Image(img_buffer)
                 if imagen_rl.drawWidth > ancho_max and imagen_rl.drawWidth > 0:
                     escala = ancho_max / float(imagen_rl.drawWidth)
                     imagen_rl.drawWidth = ancho_max

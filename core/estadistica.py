@@ -1,6 +1,4 @@
-"""Módulo funcional de análisis estadístico descriptivo y correlaciones."""
-
-from __future__ import annotations
+"""Módulo funcional de análisis estadístico descriptivo y agrupaciones."""
 
 import logging
 from typing import Any
@@ -8,24 +6,20 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from core.utils import (
-    calcular_limites_iqr,
-    es_columna_numerica,
-    obtener_columnas_numericas,
-)
+from core.utils import es_columna_numerica, obtener_columnas_numericas
 
 logger = logging.getLogger(__name__)
 
 
 def _a_valor_nativo(valor: Any) -> Any:
-    """Convierte escalares NumPy/Pandas a tipos nativos serializables en JSON."""
+    """Convierte valores de NumPy o Pandas a tipos básicos de Python para JSON."""
     if pd.isna(valor):
         return None
-    if isinstance(valor, (np.integer,)):
+    if isinstance(valor, np.integer):
         return int(valor)
-    if isinstance(valor, (np.floating,)):
+    if isinstance(valor, np.floating):
         return round(float(valor), 4)
-    if isinstance(valor, (np.bool_,)):
+    if isinstance(valor, np.bool_):
         return bool(valor)
     if isinstance(valor, pd.Timestamp):
         return valor.isoformat()
@@ -33,7 +27,7 @@ def _a_valor_nativo(valor: Any) -> Any:
 
 
 def resumen_descriptivo(df: pd.DataFrame) -> list[dict[str, Any]]:
-    """Calcula métricas estadísticas descriptivas para cada columna numérica."""
+    """Calcula estadísticas descriptivas para cada columna numérica del DataFrame."""
     if not isinstance(df, pd.DataFrame):
         raise ValueError("El parámetro 'df' debe ser un pandas.DataFrame.")
 
@@ -48,9 +42,11 @@ def resumen_descriptivo(df: pd.DataFrame) -> list[dict[str, Any]]:
 
             valores = serie.to_numpy(dtype=float)
             conteo = int(valores.size)
-            # ddof=1 calcula desviación/varianza muestral (N - 1); usa 0 si solo hay 1 dato
             ddof = 1 if conteo > 1 else 0
-            # skew() mide la asimetría de la distribución (0 indica simetría)
+
+            modas = serie.mode(dropna=True)
+            moda = round(float(modas.iloc[0]), 4) if not modas.empty else 0.0
+
             asimetria_raw = serie.skew()
             asimetria = 0.0 if pd.isna(asimetria_raw) else float(asimetria_raw)
 
@@ -60,14 +56,15 @@ def resumen_descriptivo(df: pd.DataFrame) -> list[dict[str, Any]]:
                     "conteo": conteo,
                     "media": round(float(np.mean(valores)), 4),
                     "mediana": round(float(np.median(valores)), 4),
+                    "moda": moda,
                     "desviacion_estandar": round(
                         float(np.std(valores, ddof=ddof)), 4
                     ),
                     "varianza": round(float(np.var(valores, ddof=ddof)), 4),
                     "minimo": round(float(np.min(valores)), 4),
                     "maximo": round(float(np.max(valores)), 4),
-                    "q25": round(float(serie.quantile(0.25)), 4),
-                    "q75": round(float(serie.quantile(0.75)), 4),
+                    "q25": round(float(np.percentile(valores, 25)), 4),
+                    "q75": round(float(np.percentile(valores, 75)), 4),
                     "asimetria": round(asimetria, 4),
                 }
             )
@@ -85,7 +82,7 @@ def resumen_descriptivo(df: pd.DataFrame) -> list[dict[str, Any]]:
 def analizar_valores_clave(
     df: pd.DataFrame, col_categoria: str, col_metrica: str
 ) -> dict[str, Any]:
-    """Identifica registros extremos y lidera agrupaciones por categoría."""
+    """Obtiene valores extremos, medidas centrales y agrupación por categoría."""
     if not isinstance(df, pd.DataFrame):
         raise ValueError("El parámetro 'df' debe ser un pandas.DataFrame.")
     if col_categoria not in df.columns:
@@ -108,7 +105,17 @@ def analizar_valores_clave(
             f"'{col_categoria}' y '{col_metrica}'."
         )
 
-    # idxmax() e idxmin() devuelven la etiqueta de índice del valor máximo y mínimo
+    serie_metrica = df_valido[col_metrica].astype(float)
+    valores_num = serie_metrica.to_numpy(dtype=float)
+    media_metrica = round(float(np.mean(valores_num)), 4)
+    mediana_metrica = round(float(np.median(valores_num)), 4)
+    modas_metrica = serie_metrica.mode(dropna=True)
+    moda_metrica = (
+        round(float(modas_metrica.iloc[0]), 4)
+        if not modas_metrica.empty
+        else 0.0
+    )
+
     idx_max = df_valido[col_metrica].idxmax()
     idx_min = df_valido[col_metrica].idxmin()
 
@@ -127,7 +134,6 @@ def analizar_valores_clave(
         str(k): _a_valor_nativo(v) for k, v in fila_min.to_dict().items()
     }
 
-    # observed=True evita categorías vacías si la columna es de tipo Categorical
     agrupado = (
         df_valido.groupby(col_categoria, observed=True)[col_metrica]
         .agg(["mean", "sum", "count", "max"])
@@ -155,6 +161,9 @@ def analizar_valores_clave(
     return {
         "col_categoria": col_categoria,
         "col_metrica": col_metrica,
+        "media_metrica": media_metrica,
+        "mediana_metrica": mediana_metrica,
+        "moda_metrica": moda_metrica,
         "registro_maximo": registro_maximo,
         "valor_maximo": round(float(fila_max[col_metrica]), 4),
         "registro_minimo": registro_minimo,
@@ -181,7 +190,6 @@ def matriz_correlacion(df: pd.DataFrame) -> dict[str, Any]:
         return {"columnas": cols_num, "matriz": {}}
 
     try:
-        # corr(method="pearson") calcula el coeficiente lineal r en [-1, 1] por pares
         corr_df = df[cols_num].corr(method="pearson").round(3).fillna(0.0)
         matriz = {
             str(col): {
@@ -202,7 +210,7 @@ def extraer_metricas_grafico(
     col_metrica: str | None = None,
     col_categoria: str | None = None,
 ) -> dict[str, Any]:
-    """Extrae métricas exactas de una visualización para explicabilidad IA."""
+    """Extrae las cifras resumidas de una gráfica para enviarlas a la IA."""
     if not isinstance(df, pd.DataFrame):
         raise ValueError("El parámetro 'df' debe ser un pandas.DataFrame.")
 
@@ -217,19 +225,19 @@ def extraer_metricas_grafico(
             raise ValueError(
                 f"La columna '{col_metrica}' no tiene valores válidos."
             )
-        q25, q75, _, lim_inf, lim_sup = calcular_limites_iqr(serie)
-        outliers = int(((serie < lim_inf) | (serie > lim_sup)).sum())
+        valores = serie.to_numpy(dtype=float)
         modas = serie.mode(dropna=True)
         moda = round(float(modas.iloc[0]), 4) if not modas.empty else None
         return {
             "columna": col_metrica,
-            "conteo": int(serie.size),
-            "media": round(float(serie.mean()), 4),
-            "mediana": round(float(serie.median()), 4),
+            "conteo": int(valores.size),
+            "media": round(float(np.mean(valores)), 4),
+            "mediana": round(float(np.median(valores)), 4),
             "moda": moda,
-            "q25": round(q25, 4),
-            "q75": round(q75, 4),
-            "outliers": outliers,
+            "minimo": round(float(np.min(valores)), 4),
+            "maximo": round(float(np.max(valores)), 4),
+            "q25": round(float(np.percentile(valores, 25)), 4),
+            "q75": round(float(np.percentile(valores, 75)), 4),
         }
 
     if tipo in {"barras", "barras_categoria", "boxplot"}:
