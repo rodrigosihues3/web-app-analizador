@@ -15,6 +15,7 @@ os.environ.pop("GOOGLE_API_KEY", None)
 logger = logging.getLogger(__name__)
 
 MODELO_GEMINI = "gemini-2.5-flash"
+API_VERSION_GEMINI = "v1beta"
 TIMEOUT_SEGUNDOS = 10.0
 TIMEOUT_MILISEGUNDOS = 10000
 
@@ -74,6 +75,7 @@ def _invocar_gemini(
     cliente = genai.Client(
         api_key=api_key,
         http_options=types.HttpOptions(
+            api_version=API_VERSION_GEMINI,
             timeout=TIMEOUT_MILISEGUNDOS,
             retry_options=types.HttpRetryOptions(attempts=1),
         ),
@@ -152,6 +154,7 @@ def _invocar_gemini_grafico(
     cliente = genai.Client(
         api_key=api_key,
         http_options=types.HttpOptions(
+            api_version=API_VERSION_GEMINI,
             timeout=TIMEOUT_MILISEGUNDOS,
             retry_options=types.HttpRetryOptions(attempts=1),
         ),
